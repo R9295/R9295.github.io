@@ -16,7 +16,7 @@
       <description>Introduction MozillaVPN&amp;rsquo;s README is already quite good, but is lacking a few Debian specific packages.
 MozillaVPN is built with Qt, so it&amp;rsquo;s moments like these when you appreciate good distributions cause compiling Qt is a nightmare
 Approach Install and setup Qt5
-sudo apt install qtdeclarative5-dev \ libqt5networkauth5-dev \ libqt5websockets5-dev \ libqt5charts5-dev \ qtbase5-dev \ qtchooser \ qt5-qmake \ qtbase5-dev-tools \ qttools5-dev \ qml-module-qtcharts \ qml-module-qtgraphicaleffects \ qml-module-qtquick-controls \ qml-module-qtquick-controls2 \ qml-module-qtquick-extras \ qml-module-qtquick-layouts \ qml-module-qtquick-window2 \ qml-module-qtquick2 \ qml-module-qtqml-models2 qml-module-qtqml \ vim ~/.</description>
+sudo apt install qtdeclarative5-dev \ libqt5networkauth5-dev \ libqt5websockets5-dev \ libqt5charts5-dev \ qtbase5-dev \ qtchooser \ qt5-qmake \ qtbase5-dev-tools \ qttools5-dev \ qml-module-qtcharts \ qml-module-qtgraphicaleffects \ qml-module-qtquick-controls \ qml-module-qtquick-controls2 \ qml-module-qtquick-extras \ qml-module-qtquick-layouts \ qml-module-qtquick-window2 \ qml-module-qtquick2 \ qml-module-qtqml-models2 qml-module-qtqml vim ~/.</description>
     </item>
     
     <item>

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Tags on Ruebezahl&#39;s Dwellings</title>
+    <link>https://R9295.github.io/tags/</link>
+    <description>Recent content in Tags on Ruebezahl&#39;s Dwellings</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>en-gb</language>
+    <lastBuildDate>Tue, 11 Jan 2022 00:00:00 +0000</lastBuildDate><atom:link href="https://R9295.github.io/tags/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>debian</title>
+      <link>https://R9295.github.io/tags/debian/</link>
+      <pubDate>Tue, 11 Jan 2022 00:00:00 +0000</pubDate>
+      
+      <guid>https://R9295.github.io/tags/debian/</guid>
+      <description></description>
+    </item>
+    
+    <item>
+      <title>mozillavpn</title>
+      <link>https://R9295.github.io/tags/mozillavpn/</link>
+      <pubDate>Tue, 11 Jan 2022 00:00:00 +0000</pubDate>
+      
+      <guid>https://R9295.github.io/tags/mozillavpn/</guid>
+      <description></description>
+    </item>
+    
+  </channel>
+</rss>

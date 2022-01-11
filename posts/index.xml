@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Posts on Ruebezahl&#39;s Dwellings</title>
+    <link>https://R9295.github.io/posts/</link>
+    <description>Recent content in Posts on Ruebezahl&#39;s Dwellings</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>en-gb</language>
+    <lastBuildDate>Tue, 11 Jan 2022 00:00:00 +0000</lastBuildDate><atom:link href="https://R9295.github.io/posts/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>How to install MozillaVPN Client on Debian 11 (Bullseye)</title>
+      <link>https://R9295.github.io/posts/install_mozilla_vpn_debian/</link>
+      <pubDate>Tue, 11 Jan 2022 00:00:00 +0000</pubDate>
+      
+      <guid>https://R9295.github.io/posts/install_mozilla_vpn_debian/</guid>
+      <description>Introduction MozillaVPN&amp;rsquo;s README is already quite good, but is lacking a few Debian specific packages.
+MozillaVPN is built with Qt, so it&amp;rsquo;s moments like these when you appreciate good distributions cause compiling Qt is a nightmare
+Approach Install and setup Qt5
+sudo apt install qtdeclarative5-dev \ libqt5networkauth5-dev \ libqt5websockets5-dev \ libqt5charts5-dev \ qtbase5-dev \ qtchooser \ qt5-qmake \ qtbase5-dev-tools \ qttools5-dev \ qml-module-qtcharts \ qml-module-qtgraphicaleffects \ qml-module-qtquick-controls \ qml-module-qtquick-controls2 \ qml-module-qtquick-extras \ qml-module-qtquick-layouts \ qml-module-qtquick-window2 \ qml-module-qtquick2 \ qml-module-qtqml-models2 qml-module-qtqml \ vim ~/.</description>
+    </item>
+    
+  </channel>
+</rss>

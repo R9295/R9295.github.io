@@ -12,7 +12,7 @@
       <pubDate>Mon, 01 Jan 0001 00:00:00 +0000</pubDate>
       
       <guid>https://R9295.github.io/posts/midi_sequencer_go/</guid>
-      <description>Introduction Generative music is always fun and engaging, so I decided to build a simple MIDI sequencer to mess around with.
+      <description>Introduction Generative music is always fun and engaging, so I decided to build a simple MIDI sequencer to mess around.
 Setup project $ mkdir gen_seq $ cd gen_seq $ go mod init Sequencer $ touch main.go Install dependencies We&amp;rsquo;ll be using gomidi with the rtmidi backend
 $ go get gitlab.com/gomidi/midi/v2@latest Create MIDI ports We need to create:
 MIDI-in to sync our sequencer with the master clock MIDI-out for the sequencer to send notes to.</description>

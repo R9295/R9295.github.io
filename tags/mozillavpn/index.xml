@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
   <channel>
-    <title>mozillavpn on Ruebezahl&#39;s Dwellings</title>
+    <title>mozillavpn on Ruebezahl&#39;s dwellings</title>
     <link>https://R9295.github.io/tags/mozillavpn/</link>
-    <description>Recent content in mozillavpn on Ruebezahl&#39;s Dwellings</description>
+    <description>Recent content in mozillavpn on Ruebezahl&#39;s dwellings</description>
     <generator>Hugo -- gohugo.io</generator>
-    <language>en-gb</language>
+    <language>en</language>
     <lastBuildDate>Tue, 11 Jan 2022 00:00:00 +0000</lastBuildDate><atom:link href="https://R9295.github.io/tags/mozillavpn/index.xml" rel="self" type="application/rss+xml" />
     <item>
       <title>How to install MozillaVPN Client on Debian 11 (Bullseye)</title>

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+  <channel>
+    <title>cpython on Ruebezahl&#39;s dwellings</title>
+    <link>https://R9295.github.io/tags/cpython/</link>
+    <description>Recent content in cpython on Ruebezahl&#39;s dwellings</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>en</language>
+    <lastBuildDate>Thu, 08 Dec 2022 00:00:00 +0000</lastBuildDate><atom:link href="https://R9295.github.io/tags/cpython/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>Implementing module import policies in CPython</title>
+      <link>https://R9295.github.io/posts/towards_import_policy_python/</link>
+      <pubDate>Thu, 08 Dec 2022 00:00:00 +0000</pubDate>
+      
+      <guid>https://R9295.github.io/posts/towards_import_policy_python/</guid>
+      <description>Introduction Supply chain attacks are the new big thing! Several points in the package distribution chain
+from maintainers to version control repositories to package repositories can be targeted to distribute malicious software.
+INSERT!examples eg: ssh key stealing, etc
+To wreak havoc, we need access to operating system APIs. In my opinion, the primary ones are:
+Filesystem. To read or write to files is crucial to either persist malware or to read sensitive files (eg.</description>
+    </item>
+    
+  </channel>
+</rss>

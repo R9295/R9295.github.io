@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/">
   <channel>
-    <title>Posts on Ruebezahl&#39;s dwellings</title>
-    <link>https://R9295.github.io/posts/</link>
-    <description>Recent content in Posts on Ruebezahl&#39;s dwellings</description>
+    <title>supply chain attack on Ruebezahl&#39;s dwellings</title>
+    <link>https://R9295.github.io/tags/supply-chain-attack/</link>
+    <description>Recent content in supply chain attack on Ruebezahl&#39;s dwellings</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en</language>
-    <lastBuildDate>Thu, 15 Jun 2023 00:00:00 +0000</lastBuildDate><atom:link href="https://R9295.github.io/posts/index.xml" rel="self" type="application/rss+xml" />
+    <lastBuildDate>Thu, 15 Jun 2023 00:00:00 +0000</lastBuildDate><atom:link href="https://R9295.github.io/tags/supply-chain-attack/index.xml" rel="self" type="application/rss+xml" />
     <item>
       <title>Mitigating Install Time Supply Chain Attacks in Python.</title>
       <link>https://R9295.github.io/posts/python_install_time/</link>
@@ -14,16 +14,6 @@
       
       <guid>https://R9295.github.io/posts/python_install_time/</guid>
       <description>Several supply chain attacks notably in the Python and Javascript ecosystem exploit install time hooks to perform malicious activity 1 2. Install time hooks allow running arbitray code before or after package installation. Since attacks utilizing install time hooks do not involve developers actually using the package, it makes them an attractive method for attackers. The most common behaviour observed in known supply chain attacks is data exflitration. Common targets include ssh keys, passwords, dotfiles, environment variables etc.</description>
-    </item>
-    
-    <item>
-      <title>Build a Generative MIDI sequencer in Go</title>
-      <link>https://R9295.github.io/posts/midi_sequencer_go/</link>
-      <pubDate>Sat, 18 Jun 2022 00:00:00 +0000</pubDate>
-      
-      <guid>https://R9295.github.io/posts/midi_sequencer_go/</guid>
-      <description>Introduction Generative music is always fun and engaging, so I decided to build a simple MIDI sequencer to mess around. In this project, the sequencer sends a random note within a given octave every quarter bar (4/4) Because it&amp;rsquo;s so simple, the code provided will be very easy to extend as you please. See Bonus
-Setup project $ mkdir gen_seq $ cd gen_seq $ go mod init Sequencer $ touch main.</description>
     </item>
     
   </channel>

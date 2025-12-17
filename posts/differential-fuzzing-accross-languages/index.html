@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="en" dir="auto">
+
+<head><meta charset="utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta name="robots" content="index, follow">
+<title>Differential Fuzzing Across The Language Divide | R9295&#39;s blog</title>
+<meta name="keywords" content="">
+<meta name="description" content="TLDR: This article is an exploration of integrating three different interpreted(!) languages to perform coverage guided, in-process differential fuzzing using LibAFL. Three approaches are attemped: Invoking as a command, embedding the interpreter and shared memory.
+Differential fuzzing is one of the most exciting forms of fuzzing. The essence is to test competing implementations of a library or an application with the same test input, with the hope of finding a difference in the execution outcome.">
+<meta name="author" content="">
+<link rel="canonical" href="https://R9295.github.io/posts/differential-fuzzing-accross-languages/">
+<link rel="stylesheet" href="/fonts/inter.css">
+<link crossorigin="anonymous" href="/assets/css/stylesheet.8c06e9af266726f82c1848dc3ce626deec80d8263eaca06fc786fbb7763b3443.css" integrity="sha256-jAbpryZnJvgsGEjcPOYm3uyA2CY&#43;rKBvx4b7t3Y7NEM=" rel="preload stylesheet" as="style">
+<script defer crossorigin="anonymous" src="/assets/js/highlight.f413e19d0714851f6474e7ee9632408e58ac146fbdbe62747134bea2fa3415e0.js" integrity="sha256-9BPhnQcUhR9kdOfuljJAjlisFG&#43;9vmJ0cTS&#43;ovo0FeA="
+    onload="hljs.initHighlightingOnLoad();"></script>
+<link rel="icon" href="https://R9295.github.io/favicon.ico">
+<link rel="icon" type="image/png" sizes="16x16" href="https://R9295.github.io/favicon-16x16.png">
+<link rel="icon" type="image/png" sizes="32x32" href="https://R9295.github.io/favicon-32x32.png">
+<link rel="apple-touch-icon" href="https://R9295.github.io/apple-touch-icon.png">
+<link rel="mask-icon" href="https://R9295.github.io/safari-pinned-tab.svg">
+<meta name="theme-color" content="#2e2e33">
+<meta name="msapplication-TileColor" content="#2e2e33">
+<noscript>
+    <style>
+        #theme-toggle,
+        .top-link {
+            display: none;
+        }
+
+    </style>
+    <style>
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --theme: rgb(29, 30, 32);
+                --entry: rgb(46, 46, 51);
+                --primary: rgb(218, 218, 219);
+                --secondary: rgb(155, 156, 157);
+                --tertiary: rgb(65, 66, 68);
+                --content: rgb(196, 196, 197);
+                --hljs-bg: rgb(46, 46, 51);
+                --code-bg: rgb(55, 56, 62);
+                --border: rgb(51, 51, 51);
+            }
+
+            .list {
+                background: var(--theme);
+            }
+
+            .list:not(.dark)::-webkit-scrollbar-track {
+                background: 0 0;
+            }
+
+            .list:not(.dark)::-webkit-scrollbar-thumb {
+                border-color: var(--theme);
+            }
+        }
+
+    </style>
+</noscript><meta property="og:title" content="Differential Fuzzing Across The Language Divide" />
+<meta property="og:description" content="TLDR: This article is an exploration of integrating three different interpreted(!) languages to perform coverage guided, in-process differential fuzzing using LibAFL. Three approaches are attemped: Invoking as a command, embedding the interpreter and shared memory.
+Differential fuzzing is one of the most exciting forms of fuzzing. The essence is to test competing implementations of a library or an application with the same test input, with the hope of finding a difference in the execution outcome." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://R9295.github.io/posts/differential-fuzzing-accross-languages/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2025-12-17T12:55:13&#43;01:00" />
+<meta property="article:modified_time" content="2025-12-17T12:55:13&#43;01:00" />
+
+<meta name="twitter:card" content="summary"/>
+<meta name="twitter:title" content="Differential Fuzzing Across The Language Divide"/>
+<meta name="twitter:description" content="TLDR: This article is an exploration of integrating three different interpreted(!) languages to perform coverage guided, in-process differential fuzzing using LibAFL. Three approaches are attemped: Invoking as a command, embedding the interpreter and shared memory.
+Differential fuzzing is one of the most exciting forms of fuzzing. The essence is to test competing implementations of a library or an application with the same test input, with the hope of finding a difference in the execution outcome."/>
+
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [, 
+    {
+      "@type": "ListItem",
+      "position":  2 ,
+      "name": "Posts",
+      "item": "https://R9295.github.io/posts/"
+    }, 
+    {
+      "@type": "ListItem",
+      "position":  3 ,
+      "name": "Differential Fuzzing Across The Language Divide",
+      "item": "https://R9295.github.io/posts/differential-fuzzing-accross-languages/"
+    }
+  ]
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "Differential Fuzzing Across The Language Divide",
+  "name": "Differential Fuzzing Across The Language Divide",
+  "description": "TLDR: This article is an exploration of integrating three different interpreted(!) languages to perform coverage guided, in-process differential fuzzing using LibAFL. Three approaches are attemped: Invoking as a command, embedding the interpreter and shared memory.\nDifferential fuzzing is one of the most exciting forms of fuzzing. The essence is to test competing implementations of a library or an application with the same test input, with the hope of finding a difference in the execution outcome.",
+  "keywords": [
+    
+  ],
+  "articleBody": " TLDR: This article is an exploration of integrating three different interpreted(!) languages to perform coverage guided, in-process differential fuzzing using LibAFL. Three approaches are attemped: Invoking as a command, embedding the interpreter and shared memory.\nDifferential fuzzing is one of the most exciting forms of fuzzing. The essence is to test competing implementations of a library or an application with the same test input, with the hope of finding a difference in the execution outcome.\nSuppose you have two JSON parsing libraries, both should behave the same given the same JSON string input to parse. This is not often the case, however. Some may have heard of the infamous differential assessment of JSON parsers or crypto libraries; with the latter conducted through differential fuzzing. Differences, unfortunately, will always be present in competing implementations, differential fuzzing can help identify these cases.\nRecently, having attended devconnect, I was inspired to further explore differential fuzzing. I decided to pick the Ethereal Virtual Machine (EVM) as my target as I found it to scratch a research itch - The three most popular clients, go-ethereum, Nethermind and Besu, are written in three different languages: Java, C# and Go. Two of them are interpreted! How would one approach such a fuzzing campaign? Compiled languages interoperate with C/C++, which is usually trivial to integrate into a campaign. Interpretered languages on the other hand? Could I embed them? Maybe they are fast enough to just call as a process?\nI decided to find out, and write about it along the way.\nThe ingredients required for a differential fuzzing campaign. A source of code coverage Coverage guided fuzzing remains one of the most effective ways to test applications. Coverage allows a fuzzer to infer application state and control flow to better guide itself and its mutation strategies. In my opinion, you only need one implementation to provide coverage. I chose go-ethereum as my coverage source, not just because it’s the canonical implementation of the EVM but also the fact that my colleagues recently worked on a LibAFL-based shim for Go fuzzing, allowing me to plug-in any LibAFL based fuzzer. Besides that, Java and C#, in my opinion, do not have a fuzzing ecosystem whose maturity is on par with that of Go.\nA unified input format. If we were fuzzing JSON, it would be an array of bytes, representing JSON. However, we’re fuzzing a rather complex application, with complex state. Luckily, most ethereum implementations support two test formats: State Tests and Blockchain Tests.\nState Test defines a test structure which enables:\nCreating an initial state. Executing a series of transactions. Making assertions on expected execution outcomes. As each client implements this functionality, we do not have to create complicated fuzzing harnesses for each implementation.\nFor this campaign, I decided to go with State Test as I was more interested in the EVM than the blockchain implementation.\nA unified output format. This is where it can get complicated, and we must remember to keep it simple. It could be tempting to compare the precise execution result, but during fuzzing, we should NOT care about why the implementations differ, only that they do differ. Triage, which comes after, would be the place to investigate differences.\nThus, we need to find the simplest way to see if the execution outcome was the same accross all chains. Successful execution of the contract is insufficient. A bug where a contract writes to two different storage slots would be missed. So, we use the stateRoot. Think of it as a representation of the current state of the entire chain. This must be the same accross all implementations after executing the same transaction on the same initial state.\nSpeed. A lot of it. Fuzzing must be fast to be effective. Depending on the application, you should have hundreds, or even thousands of executions per second, per core. For us, this will be difficult and would come to be a pain-point. Nevertheless, investing in speeding up your target will reap large rewards. For example, for any given testcase, you may just want to compare two implementations instead of three at a time and allow the fuzzer to mutate which two implementations to test. Maybe you can mock certain data? Maybe you can remove uncessary hashing operations?\nA fuzzer I used a grammar fuzzer I have built, called Autarkie. Autarkie was born out of the need to implement a modern grammar fuzzing solution, whose grammar was easy to define and debuggable. Here’s my presentation on Autarkie at WHY2025.\nAutarkie supports AFL++’s forkserver, libfuzzer’s in-process execution and now, partly thanks to my colleagues’ efforts, Go!\nLet’s get started.\nSetting up differential fuzzing I like to get started fuzzing quickly, and then work on speeding up the target while the fuzzer does its job. Since we can stop and resume the campaign at any point, we should not waste time getting started.\nSince go-thereum will be our coverage source, and thus must be in a typical harness, there are a few approaches we can try for the other two:\nInvoking as a command Embedding Shared Memory Let’s now go through these approaches.\nInvoking as a command Maybe the implementations are fast enough so that we can just invoke them as a process. Let’s find out.\n# install dotnet 10 git clone https://github.com/NethermindEth/nethermind --depth 1 cd nethermind/src/Nethermind/Nethermind.Test.Runner/ dotnet build Nethermind.Test.Runner.csproj -c Release cd ../../../.. ./nethermind/src/Nethermind/artifacts/bin/Nethermind.Test.Runner/release/nethtest \\ --input test.json ________________________________________________________ Executed in 2.18 secs fish external usr time 2.11 secs 779.00 micros 2.11 secs sys time 0.07 secs 122.00 micros 0.07 secs We were talking about thousands of executions per-second! We can barely get one!\nLet’s try Besu.\n# install openjdk-21 git clone https://github.com/hyperledger/besu --depth 1 cd besu /gradlew :ethereum:evmtool:installDist cd .. time ./besu/ethereum/evmtool/build/install/evmtool/bin/evmtool state-test ./test.json ________________________________________________________ Executed in 3.03 secs fish external usr time 5.57 secs 0.00 millis 5.57 secs sys time 0.27 secs 1.11 millis 0.26 secs Both appear to be no-go for command invocation. For the sake of it, let’s try the Go one too, even though we will be embedding the EVM since it will be our coverage source.\n# install go 1.25 git clone https://github.com/ethereum/go-ethereum cd go-ethereum/cmd/evm go build cd ../../.. ./go-ethereum/cmd/evm/evm statetest ./test.json ________________________________________________________ Executed in 21.53 millis fish external usr time 6.83 millis 716.00 micros 6.11 millis sys time 20.46 millis 96.00 micros 20.36 millis That’s more like it.\nWe now know that simply calling the commands will not work. My suspicion is that it takes too long for the interpreters to start.\nWhat about embedding?\nEmbedding the interpreters Interpreted languages typically support embedding their interpreters. Lua, for example, is famous for that. Python, to some extent, too. Perhaps we could gain significant speed by embedding? One of the main advantages is that we would need to start the interpreter only once and that we would not have any process invocation or file system overhead.\nEmbedding Besu (Java) Let’s start with Besu. Since Besu’s StateTestRunner is actually a SubCommand, we need to extract the core-logic so it can be invoked as a “library function”\nWe then need to interface this function through the JNI which allows the invocation of Java programs from other languages.\nClaude helped a lot here as I was aiming for something that “just worked”. Remember, we do the performance improvements later.\nHere’s some pseudo code that roughly represented the Java harness.\n// Fuzz.java public class Fuzz { public static String fuzzStateTest(final String testJson) { final String stateRoot; stateRoot = Fuzz.executeSingleTest(testJson, \"Osaka\"); return stateRoot; } public static String executeSingleTest(final String testJson, final String fork) { // copy the core logic to run the test // ....... } } Let’s build and then we’ll create a Rust integration using jni. I chose Rust since I am not a particularly experienced C/C++ developer.\n# openjdk-21 cd besu ./gradlew --parallel ethereum:evmtool:installDist mkdir bindings cd bindings cargo init cargo add jni --feautres invocation The following code initializes a minimal JVM with the required classpath libraries. Then, it invokes our fuzzStateTest function with a simple test state test. We do this in an infinite loop just to see the execution time.\nIn src/main.rs\nuse std::time::SystemTime; use jni::objects::{JClass, JObject, JString, JValue}; use jni::JNIVersion; use jni::JavaVM; fn main() -\u003e Result\u003c(), Box\u003cdyn std::error::Error\u003e\u003e { // Find all the built .jar files let lib_dir = std::fs::read_dir(\"../ethereum/evmtool/build/install/evmtool/lib/\"); let mut jar_paths = vec![]; if let Ok(entries) = lib_dir { for entry in entries.flatten() { let entry_path = entry.path(); if entry_path.extension().and_then(|s| s.to_str()) == Some(\"jar\") { jar_paths.push(entry_path.to_string_lossy().to_string()); } } } // Add them as options let jvm_args = jni::InitArgsBuilder::new() .version(JNIVersion::V8) // Java 8 style; choose version matching your JDK .option(format!(\"-Djava.class.path={}\", jar_paths.join(\":\"))) .build()?; // Create the JVM let jvm = JavaVM::new(jvm_args)?; // Find our harness function let mut env = jvm.attach_current_thread()?; let class = env.find_class(\"org/hyperledger/besu/evmtool/Fuzz\")?; // For benchmarking's sakes, let's just run this in a loop loop { let json = env.new_string(std::fs::read_to_string(\"./test.json\").unwrap())?; let now = SystemTime::now(); let result = env.call_static_method( \u0026class, \"fuzzStateTest\", \"(Ljava/lang/String;)Ljava/lang/String;\", \u0026[JValue::Object(\u0026JObject::from(json))], )?; println!(\"{:?}\", now.elapsed()); } Ok(()) } Now, let’s run our experiment to see if embedding led to a speed up.\ncargo run ok(2.594644601s) ok(37.659974ms) Ok(18.633532ms) Ok(22.066574ms) Ok(13.567659ms) Ok(15.196381ms) Ok(11.666704ms) Ok(10.193306ms) Ok(9.886665ms) Ok(8.426703ms) Ok(6.817455ms) Ok(8.034997ms) That’s a drastic speed up! Initially, it’s a bit slow, but it’s miles ahead of 2 seconds! I’m certain that further optimizations could be made but that’s for later… We now know that we can reasonably fuzz with this.\nEmbedding Nethermind (.NET) Now, let’s try .NET. which happens to support AOT (Ahead Of Time) compilation. According to the docs:\n“Native AOT apps have faster startup time and smaller memory footprints.”\nPerfect! let’s try!\ncd nethermind/src/Nethermind/Nethermind.Test.Runner/ dotnet build Nethermind.Test.Runner.csproj -c Release vim Nethermind.Test.Runner.csproj Add the following lines inside the ... section.\ntrue false Let’s build\nNethermind.Test.Runner net10.0 linux-x64 failed with 4 error(s) (3.5s) → /tmp/nethermind/src/Nethermind/artifacts/bin/Nethermind.Test.Runner/release_linux-x64/nethtest.dll /tmp/nethermind/src/Nethermind/Nethermind.Serialization.Json/EthereumJsonSerializer.cs(59): Trim analysis error IL2026: Nethermind.Serialization.Json.EthereumJsonSerializer.Serialize(T,Boolean): Using member 'System.Text.Json.JsonSerializer.Serialize(T,JsonSerializerOptions)' which has 'RequiresUnreferencedCodeAttribute' can break functionality when trimming application code. JSON serialization and deserialization might require types that cannot be statically analyzed. Use the overload that takes a JsonTypeInfo or JsonSerializerContext, or make sure all of the required types are preserved. /tmp/nethermind/src/Nethermind/Nethermind.Serialization.Json/EthereumJsonSerializer.cs(59): AOT analysis error IL3050: Nethermind.Serialization.Json.EthereumJsonSerializer.Serialize(T,Boolean): Using member 'System.Text.Json.JsonSerializer.Serialize(T,JsonSerializerOptions)' which has 'RequiresDynamicCodeAttribute' can break functionality when AOT compiling. JSON serialization and deserialization might require types that cannot be statically analyzed and might need runtime code generation. Use System.Text.Json source generation for native AOT applications. EXEC : error Index was outside the bounds of the array. /home/aarnav/.nuget/packages/microsoft.dotnet.ilcompiler/10.0.0/build/Microsoft.NETCore.Native.targets(330,5): error MSB3073: The command \"\"/home/aarnav/.nuget/packages/runtime.linux-x64.microsoft.dotnet.ilcompiler/10.0.0/tools/ilc\" @\"/tmp/nethermind/src/Nethermind/artifacts/obj/Nethermind.Test.Runner/release_linux-x64/native/nethtest.ilc.rsp\"\" exited with code 1. Build failed with 4 error(s) in 44.6s It turns out that using reflection is not allowed in .NET’s AOT mode.\nFixing the JSON reflection errors led to other reflection errors in Nethermind’s EVM runtime. The extensive usage of runtime reflection meant that AOT compilation was not possible without significant changes.\nSince we cannot compile it as an Ahead of Time library, we must embed the runtime, similar to Besu.\nSimilar to what we did for Java, we first need to abstract the test runner into another function, since it is tightly coupled with the CLI.\nLet’s try a very simple approach:\n// FuzzRunner.cs public static int FuzzRunTest(IntPtr args, int sizeBytes) { try { string testJson = System.Text.Encoding.UTF8.GetString( new ReadOnlySpan\u003cbyte\u003e((void*)args, sizeBytes) ); ulong chainId = MainnetSpecProvider.Instance.ChainId; IEnumerable tests = JsonToEthereumTest.ConvertStateTest(testJson); StateTestsRunner runner = new( new InMemoryTestSourceLoader(tests), WhenTrace.Never, traceMemory: false, traceStack: false, chainId, filter: null, enableWarmup: false, outputWriter: null); var result = runner.RunTests(); // TODO: return stateRoot return 0; } catch (Exception ex) { Console.Error.WriteLine($\"Error in FuzzRunTest: {ex}\"); return 1; } } Let’s try building and embedding.\n# dotnet 10 cd nethermind/src/Nethermind/Nethermind.Test.Runner/ dotnet build Nethermind.Test.Runner.csproj -c Release cd ../../../.. mkdir bindings cd bindings cargo init cargo add notecorehost Here’s the rust shim.\nuse netcorehost::{hostfxr::Hostfxr, pdcstr, pdcstring::PdCString}; use std::env; fn main() { env::set_current_dir(\"\") .expect(\"Failed to set working directory\"); let hostfxr = netcorehost::nethost::load_hostfxr().unwrap(); let context = hostfxr .initialize_for_runtime_config(pdcstr!(\"Nethermind.Test.Runner.Lib.runtimeconfig.json\")) .unwrap(); let fn_loader = context .get_delegate_loader_for_assembly(pdcstr!(\"Nethermind.Test.Runner.Lib.dll\")) .unwrap(); let run_test = fn_loader .get_function_with_default_signature( pdcstr!(\"Nethermind.Test.Runner.Lib.FuzzTestRunner, Nethermind.Test.Runner.Lib\"), pdcstr!(\"FuzzRunTest\"), ) .unwrap(); let json = std::fs::read_to_string(\"../test.json\").unwrap(); let result = unsafe { run_test(json.as_str().as_ptr() as *const std::ffi::c_void, json.len() as i32) }; println!(\"Test result: {}\", result); } cargo run and I got a strange error:\nError in FuzzRunTest: System.Collections.Generic.KeyNotFoundException: The given key was not present in the dictionary. at NonBlocking.ConcurrentDictionary`2.ThrowKeyNotFoundException() at NonBlocking.ConcurrentDictionary`2.get_Item(TKey key) at Nethermind.Config.ConfigProvider.GetConfig(Type configType) in /home/aarnav/projects/evm-differential-fuzzer/nethermind/src/Nethermind/Nethermind.Config/ConfigProvider.cs:line 92 at Nethermind.Config.ConfigProvider.GetConfig[T]() in /home/aarnav/projects/evm-differential-fuzzer/nethermind/src/Nethermind/Nethermind.Config/ConfigProvider.cs:line 77 at Nethermind.Core.Test.Modules.PseudoNethermindModule.Load(ContainerBuilder builder) in /home/aarnav/projects/evm-differential-fuzzer/nethermind/src/Nethermind/Nethermind.Core.Test/Modules/PseudoNethermindModule.cs:line 37 at Autofac.Module.Configure(IComponentRegistryBuilder componentRegistry) at Autofac.Core.Registration.ModuleRegistrar.\u003c.ctor\u003eb__1_0(IComponentRegistryBuilder reg) at Autofac.ContainerBuilder.Build(IComponentRegistryBuilder componentRegistry, Boolean excludeDefaultModules) at Autofac.ContainerBuilder.UpdateRegistry(IComponentRegistryBuilder componentRegistry) at Autofac.Module.Configure(IComponentRegistryBuilder componentRegistry) at Autofac.Core.Registration.ModuleRegistrar.\u003c.ctor\u003eb__1_0(IComponentRegistryBuilder reg) at Autofac.ContainerBuilder.Build(IComponentRegistryBuilder componentRegistry, Boolean excludeDefaultModules) at Autofac.ContainerBuilder.Build(ContainerBuildOptions options) at Ethereum.Test.Base.GeneralStateTestBase.RunTest(GeneralStateTest test, ITxTracer txTracer) in /home/aarnav/projects/evm-differential-fuzzer/nethermind/src/Nethermind/Ethereum.Test.Base/GeneralTestBase.cs:line 80 at Nethermind.Test.Runner.StateTestsRunner.RunTests() in /home/aarnav/projects/evm-differential-fuzzer/nethermind/src/Nethermind/Nethermind.Test.Runner/StateTestRunner.cs:line 110 at Nethermind.Test.Runner.Program.FuzzRunTest(IntPtr args, Int32 sizeBytes) in /home/aarnav/projects/evm-differential-fuzzer/nethermind/src/Nethermind/Nethermind.Test.Runner/Program.cs:line 202 Result: 1 I sunk several hours into trying to fix this, to no avail. If someone knows how to embed .NET, please let me know. I suspect that the issue is:\nthe order in which the .dll files are loaded. A type-registration issue during runtime. Frankly, debugging this was a difficult undertaking for someone who has no clue about the .NET ecosystem. LLMs were of no assistance. I decided my time was better spent fuzzing instead of getting this to work. Let’s use the shared memory approach.\nThis gives me the opportunity to explore another method! This is bound to be useful for another target as I’m sure I will encounter targets that cannot be embedded easily.\nShared Memory Since we could not get the embedding to work for .NET, we can implement a server with IPC. Like this, we make sure that we only need to start the runtime once.\nThe architecture is the following:\ntestdata = create_shared_memory_segment(\"nethermind__\"); signal = create_shared_memory_segment(\"nethermind____signal\"); loop { if read_data(signal) == \"START\\0\" { json = read_data(testdata); result = do_state_test(json); if result.is_err() { write_data(testdata, result.error); write_data(signal, \"DONE\\0\\0\"); } else { write_data(testdata, result.stateRoot); write_data(signal, \"DONE\\0\\0\"); } } else { sleep(10ms); } } We need the signal to avoid race-conditions when reading test data.\nImplementing this was very quick with Claude, since I had no .NET knowledge. Here’s the code. Sorry for the big blob! Speed results right after.\n// src/Nethermind/Nethermind.Test.Runner/Program.cs private static int RunServerMode(ParseResult parseResult, string memoryId, CancellationToken cancellationToken) { ulong chainId = parseResult.GetValue(Options.GnosisTest) ? GnosisSpecProvider.Instance.ChainId : MainnetSpecProvider.Instance.ChainId; const int SharedMemorySize = 8092; string shmPath = $\"/dev/shm/{memoryId}\"; using FileStream fs = new(shmPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.ReadWrite); fs.SetLength(SharedMemorySize); using MemoryMappedFile mmf = MemoryMappedFile.CreateFromFile(fs, null, SharedMemorySize, MemoryMappedFileAccess.ReadWrite, HandleInheritability.None, leaveOpen: false); using MemoryMappedViewAccessor accessor = mmf.CreateViewAccessor(0, SharedMemorySize, MemoryMappedFileAccess.ReadWrite); const int SharedMemorySizeSignal = 6; string shmSignalPath = $\"/dev/shm/{memoryId}__signal\"; using FileStream fsSignal = new(shmSignalPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.ReadWrite); fsSignal.SetLength(SharedMemorySizeSignal); using MemoryMappedFile mmfSignal = MemoryMappedFile.CreateFromFile(fsSignal, null, SharedMemorySizeSignal, MemoryMappedFileAccess.ReadWrite, HandleInheritability.None, leaveOpen: false); using MemoryMappedViewAccessor accessorSignal = mmfSignal.CreateViewAccessor(0, SharedMemorySizeSignal, MemoryMappedFileAccess.ReadWrite); while (!cancellationToken.IsCancellationRequested) { Thread.Sleep(10); byte[] signalBuffer = new byte[SharedMemorySizeSignal]; accessorSignal.ReadArray(0, signalBuffer, 0, SharedMemorySizeSignal); if (signalBuffer.SequenceEqual(Encoding.UTF8.GetBytes(\"START\\0\"))) { byte[] buffer = new byte[SharedMemorySize]; accessor.ReadArray(0, buffer, 0, SharedMemorySize); int jsonLength = Array.IndexOf(buffer, (byte)0); if (jsonLength == -1) jsonLength = SharedMemorySize; string testJson = Encoding.UTF8.GetString(buffer, 0, jsonLength); try { IEnumerable tests; tests = JsonToEthereumTest.ConvertStateTest(testJson); StateTestsRunner runner = new( new InMemoryTestSourceLoader(tests), WhenTrace.Never, traceMemory: false, traceStack: false, chainId, filter: null, enableWarmup: false, outputWriter: null); var result = runner.RunTests().First(); string resultString = result?.StateRoot?.ToString() ?? \"null\"; byte[] resultBytes = Encoding.UTF8.GetBytes(resultString); /// write bytes to shared memory } catch (Exception ex) { /// report error } } } return 0; } Let’s look at the speed results: I wrote a quick script to get results (milliseconds) from Nethermind:\n# all in milliseconds [Nethermind-1] 2611 [Nethermind-1] 15 [Nethermind-1] 13 [Nethermind-1] 8 [Nethermind-1] 6 [Nethermind-1] 6 After the first few cases, both Java and C# work at expected speeds! Great! Now, we have two approaches, both working reasonably well. We can begin fuzzing!\nActually! There will be a part two to this article! The full harness will be shared and I will talk about the grammar strategies I’ve implemented and how they fared.\nTo Conclude It was a challenge to differential fuzz two languages I had almost no experience with. Over all this campaign involved four languages: Go, Rust, .NET, and Java.\nI will probably just go with the shared memory approach for any other interpreted target because it’s trivial to implement and “just works\"™.\nLessons learnt Patching is inevitable The sooner you get comfortable diving into unknown code, the better your results will be. Hack it, and always measure!\nUse the magic strace command. The ultimate debugging command (credit to the Fuzzing Discord).\nstrace -tt -yy -y -f -e trace=openat,open,read,write,pipe,socket,dup2,clone,close -s 10000 -o /tmp/strace.log Always keep it simple. Fuzzing is about tradeoffs. Find out what’s best for your target. Measure, and do not over-optimize at first.\n",
+  "wordCount" : "2731",
+  "inLanguage": "en",
+  "datePublished": "2025-12-17T12:55:13+01:00",
+  "dateModified": "2025-12-17T12:55:13+01:00",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://R9295.github.io/posts/differential-fuzzing-accross-languages/"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "R9295's blog",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "https://R9295.github.io/favicon.ico"
+    }
+  }
+}
+</script>
+</head>
+
+<body class=" dark
+" id="top">
+<script>
+    if (localStorage.getItem("pref-theme") === "dark") {
+        document.body.classList.add('dark');
+    } else if (localStorage.getItem("pref-theme") === "light") {
+        document.body.classList.remove('dark')
+    } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.body.classList.add('dark');
+    }
+
+</script>
+
+<header class="header">
+    <nav class="nav">
+        <div class="logo">
+            <a href="https://R9295.github.io" accesskey="h" title="R9295&#39;s blog (Alt + H)">R9295&#39;s blog</a>
+            <div class="logo-switches">
+                <button id="theme-toggle" accesskey="t" title="(Alt + T)">
+                    <svg id="moon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
+                        fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                    </svg>
+                    <svg id="sun" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
+                        fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="5"></circle>
+                        <line x1="12" y1="1" x2="12" y2="3"></line>
+                        <line x1="12" y1="21" x2="12" y2="23"></line>
+                        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                        <line x1="1" y1="12" x2="3" y2="12"></line>
+                        <line x1="21" y1="12" x2="23" y2="12"></line>
+                        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                    </svg>
+                </button>
+            </div>
+        </div>
+        <ul id="menu">
+            <li>
+                <a href="https://R9295.github.io/about/" title="About the Author">
+                    <span>About the Author</span>
+                </a>
+            </li>
+            <li>
+                <a href="https://github.com/R9295" title="GitHub">
+                    <span>GitHub</span>
+                </a>
+            </li>
+        </ul>
+    </nav>
+</header>
+<main class="main">
+
+<article class="post-single">
+  <header class="post-header">
+    
+    <h1 class="post-title">
+      Differential Fuzzing Across The Language Divide
+    </h1>
+    <div class="post-meta"><span title='2025-12-17 12:55:13 +0100 CET'>December 17, 2025</span>
+
+</div>
+  </header> 
+  <div class="post-content"><blockquote>
+<p>TLDR: This article is an exploration of integrating three different interpreted(!) languages to perform coverage guided, in-process differential fuzzing using LibAFL. Three approaches are attemped: Invoking as a command, embedding the interpreter and shared memory.</p>
+</blockquote>
+<p>Differential fuzzing is one of the most exciting forms of fuzzing. The essence is to test competing implementations of a library or an application with the same test input, with the hope of finding a difference in the execution outcome.</p>
+<p>Suppose you have two JSON parsing libraries, both should behave the same given the same JSON string input to parse. This is not often the case, however. Some may have heard of the infamous differential <a href="https://seriot.ch/software/parsing_json.html">assessment</a> of JSON parsers or <a href="https://github.com/MozillaSecurity/cryptofuzz?tab=readme-ov-file">crypto libraries</a>; with the latter conducted through differential fuzzing. Differences, unfortunately, will always be present in competing implementations, differential fuzzing can help identify these cases.</p>
+<p>Recently, having attended <a href="https://devconnect.org/">devconnect</a>, I was inspired to further explore differential fuzzing. I decided to pick the Ethereal Virtual Machine (EVM) as my target as I found it to scratch a research itch - The three <a href="https://ethernodes.org/">most popular</a> clients, go-ethereum, Nethermind and Besu, are written in three different languages: Java, C# and Go. Two of them are interpreted! How would one approach such a fuzzing campaign? Compiled languages interoperate with C/C++, which is usually trivial to integrate into a campaign. Interpretered languages on the other hand? Could I embed them? Maybe they are fast enough to just call as a process?</p>
+<p>I decided to find out, and write about it along the way.</p>
+<h2 id="the-ingredients-required-for-a-differential-fuzzing-campaign">The ingredients required for a differential fuzzing campaign.<a hidden class="anchor" aria-hidden="true" href="#the-ingredients-required-for-a-differential-fuzzing-campaign">#</a></h2>
+<h3 id="a-source-of-code-coverage">A source of code coverage<a hidden class="anchor" aria-hidden="true" href="#a-source-of-code-coverage">#</a></h3>
+<p>Coverage guided fuzzing remains one of the most effective ways to test applications. Coverage allows a fuzzer to infer application state and control flow to better guide itself and its mutation strategies. In my opinion, you only need one implementation to provide coverage. I chose <a href="https://github.com/ethereum/go-ethereum">go-ethereum</a> as my coverage source, not just because it’s the canonical implementation of the EVM but also the fact that my colleagues recently worked on a <a href="https://github.com/srlabs/golibafl">LibAFL-based shim</a> for Go fuzzing, allowing me to plug-in any <a href="https://github.com/AFLplusplus/LibAFL">LibAFL</a> based fuzzer. Besides that, Java and C#, in my opinion, do not have a fuzzing ecosystem whose maturity is on par with that of Go.</p>
+<h3 id="a-unified-input-format">A unified input format.<a hidden class="anchor" aria-hidden="true" href="#a-unified-input-format">#</a></h3>
+<p>If we were fuzzing JSON, it would be an array of bytes, representing JSON. However, we’re fuzzing a rather complex application, with complex state. Luckily, most ethereum implementations support two test formats: <a href="https://ethereum-tests.readthedocs.io/en/v6.0.0-beta.1/test_types/state_tests.html">State Tests</a> and <a href="https://ethereum-tests.readthedocs.io/en/v6.0.0-beta.1/test_types/blockchain_tests.html">Blockchain Tests</a>.</p>
+<p>State Test defines a test structure which enables:</p>
+<ol>
+<li>Creating an initial state.</li>
+<li>Executing a series of transactions.</li>
+<li>Making assertions on expected execution outcomes.</li>
+</ol>
+<p>As each client implements this functionality, we do not have to create complicated fuzzing harnesses for each implementation.</p>
+<p>For this campaign, I decided to go with State Test as I was more interested in the EVM than the blockchain implementation.</p>
+<h3 id="a-unified-output-format">A unified output format.<a hidden class="anchor" aria-hidden="true" href="#a-unified-output-format">#</a></h3>
+<p>This is where it can get complicated, and we must remember to keep it simple. It could be tempting to compare the precise execution result, but during fuzzing, we should NOT care about why the implementations differ, only that they do differ. Triage, which comes after, would be the place to investigate differences.</p>
+<p>Thus, we need to find the simplest way to see if the execution outcome was the same accross all chains. Successful execution of the contract is insufficient. A bug where a contract writes to two different storage slots would be missed. So, we use the <a href="https://consensys.io/blog/ethereum-explained-merkle-trees-world-state-transactions-and-more">stateRoot</a>. Think of it as a representation of the current state of the entire chain. This must be the same accross all implementations after executing the same transaction on the same initial state.</p>
+<h3 id="speed-a-lot-of-it">Speed. A lot of it.<a hidden class="anchor" aria-hidden="true" href="#speed-a-lot-of-it">#</a></h3>
+<p>Fuzzing must be fast to be effective. Depending on the application, you should have hundreds, or even thousands of executions per second, per core. For us, this will be difficult and would come to be a pain-point. Nevertheless, investing in speeding up your target will reap large rewards. For example, for any given testcase, you may just want to compare two implementations instead of three at a time and allow the fuzzer to mutate which two implementations to test. Maybe you can mock certain data? Maybe you can remove uncessary hashing operations?</p>
+<h3 id="a-fuzzer">A fuzzer<a hidden class="anchor" aria-hidden="true" href="#a-fuzzer">#</a></h3>
+<p>I used a grammar fuzzer I have built, called <a href="https://github.com/R9295/autarkie">Autarkie</a>. Autarkie was born out of the need to implement a modern grammar fuzzing solution, whose grammar was easy to define and debuggable. Here&rsquo;s my presentation on Autarkie at <a href="https://www.youtube.com/watch?v=ZK5Zoh1S1oM">WHY2025</a>.</p>
+<p>Autarkie supports AFL++&rsquo;s forkserver, libfuzzer&rsquo;s in-process execution and now, partly thanks to my colleagues&rsquo; efforts, Go!</p>
+<p>Let&rsquo;s get started.</p>
+<h2 id="setting-up-differential-fuzzing">Setting up differential fuzzing<a hidden class="anchor" aria-hidden="true" href="#setting-up-differential-fuzzing">#</a></h2>
+<p>I like to get started fuzzing quickly, and then work on speeding up the target while the fuzzer does its job. Since we can stop and resume the campaign at any point, we should not waste time getting started.</p>
+<p>Since go-thereum will be our coverage source, and thus must be in a typical harness, there are a few approaches we can try for the other two:</p>
+<ol>
+<li>Invoking as a command</li>
+<li>Embedding</li>
+<li>Shared Memory</li>
+</ol>
+<p>Let&rsquo;s now go through these approaches.</p>
+<h3 id="invoking-as-a-command">Invoking as a command<a hidden class="anchor" aria-hidden="true" href="#invoking-as-a-command">#</a></h3>
+<p>Maybe the implementations are fast enough so that we can just invoke them as a process. Let&rsquo;s find out.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span><span style="color:#75715e"># install dotnet 10</span>
+</span></span><span style="display:flex;"><span>git clone https://github.com/NethermindEth/nethermind --depth <span style="color:#ae81ff">1</span>
+</span></span><span style="display:flex;"><span>cd nethermind/src/Nethermind/Nethermind.Test.Runner/
+</span></span><span style="display:flex;"><span>dotnet build Nethermind.Test.Runner.csproj -c Release
+</span></span><span style="display:flex;"><span>cd ../../../..
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>./nethermind/src/Nethermind/artifacts/bin/Nethermind.Test.Runner/release/nethtest <span style="color:#ae81ff">\ </span>
+</span></span><span style="display:flex;"><span>    --input test.json
+</span></span><span style="display:flex;"><span>________________________________________________________
+</span></span><span style="display:flex;"><span>Executed in    2.18 secs    fish           external
+</span></span><span style="display:flex;"><span>   usr time    2.11 secs  779.00 micros    2.11 secs
+</span></span><span style="display:flex;"><span>   sys time    0.07 secs  122.00 micros    0.07 secs
+</span></span></code></pre></div><p>We were talking about thousands of executions per-second! We can barely get one!</p>
+<p>Let&rsquo;s try Besu.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span><span style="color:#75715e"># install openjdk-21</span>
+</span></span><span style="display:flex;"><span>git clone https://github.com/hyperledger/besu --depth <span style="color:#ae81ff">1</span>
+</span></span><span style="display:flex;"><span>cd besu
+</span></span><span style="display:flex;"><span>/gradlew :ethereum:evmtool:installDist
+</span></span><span style="display:flex;"><span>cd ..
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>time ./besu/ethereum/evmtool/build/install/evmtool/bin/evmtool state-test ./test.json
+</span></span><span style="display:flex;"><span>________________________________________________________
+</span></span><span style="display:flex;"><span>Executed in    3.03 secs    fish           external
+</span></span><span style="display:flex;"><span>   usr time    5.57 secs    0.00 millis    5.57 secs
+</span></span><span style="display:flex;"><span>   sys time    0.27 secs    1.11 millis    0.26 secs
+</span></span></code></pre></div><p>Both appear to be no-go for command invocation. For the sake of it, let&rsquo;s try the Go one too, even though we will be embedding the EVM since it will be our coverage source.</p>
+<pre tabindex="0"><code># install go 1.25
+git clone https://github.com/ethereum/go-ethereum
+cd go-ethereum/cmd/evm
+go build
+cd ../../..
+./go-ethereum/cmd/evm/evm statetest ./test.json
+________________________________________________________
+Executed in   21.53 millis    fish           external
+   usr time    6.83 millis  716.00 micros    6.11 millis
+   sys time   20.46 millis   96.00 micros   20.36 millis
+</code></pre><p>That&rsquo;s more like it.</p>
+<p>We now know that simply calling the commands will not work. My suspicion is that it takes too long for the interpreters to start.</p>
+<p>What about embedding?</p>
+<h2 id="embedding-the-interpreters">Embedding the interpreters<a hidden class="anchor" aria-hidden="true" href="#embedding-the-interpreters">#</a></h2>
+<p>Interpreted languages typically support embedding their interpreters. Lua, for example, is famous for that. Python, to some extent, too. Perhaps we could gain significant speed by embedding? One of the main advantages is that we would need to start the interpreter only once and that we would not have any process invocation or file system overhead.</p>
+<h3 id="embedding-besu-java">Embedding Besu (Java)<a hidden class="anchor" aria-hidden="true" href="#embedding-besu-java">#</a></h3>
+<p>Let&rsquo;s start with Besu. Since Besu&rsquo;s <a href="https://github.com/hyperledger/besu/blob/main/ethereum/evmtool/src/main/java/org/hyperledger/besu/evmtool/StateTestSubCommand.java#L68-L85">StateTestRunner</a> is actually a <code>SubCommand</code>, we need to extract the core-logic so it can be invoked as a &ldquo;library function&rdquo;</p>
+<p>We then need to interface this function through the <a href="https://en.wikipedia.org/wiki/Java_Native_Interface">JNI</a> which allows the invocation of Java programs from other languages.</p>
+<p>Claude helped a lot here as I was aiming for something that &ldquo;just worked&rdquo;. Remember, we do the performance improvements later.</p>
+<p>Here&rsquo;s some pseudo code that roughly represented the Java harness.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-java" data-lang="java"><span style="display:flex;"><span><span style="color:#75715e">// Fuzz.java
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span><span style="color:#66d9ef">public</span> <span style="color:#66d9ef">class</span> <span style="color:#a6e22e">Fuzz</span> <span style="color:#f92672">{</span>  
+</span></span><span style="display:flex;"><span>  <span style="color:#66d9ef">public</span> <span style="color:#66d9ef">static</span> String <span style="color:#a6e22e">fuzzStateTest</span><span style="color:#f92672">(</span><span style="color:#66d9ef">final</span> String testJson<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">final</span> String stateRoot<span style="color:#f92672">;</span>
+</span></span><span style="display:flex;"><span>        stateRoot <span style="color:#f92672">=</span> Fuzz<span style="color:#f92672">.</span><span style="color:#a6e22e">executeSingleTest</span><span style="color:#f92672">(</span>testJson<span style="color:#f92672">,</span> <span style="color:#e6db74">&#34;Osaka&#34;</span><span style="color:#f92672">);</span>
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">return</span> stateRoot<span style="color:#f92672">;</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#f92672">}</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>  <span style="color:#66d9ef">public</span> <span style="color:#66d9ef">static</span> String <span style="color:#a6e22e">executeSingleTest</span><span style="color:#f92672">(</span><span style="color:#66d9ef">final</span> String testJson<span style="color:#f92672">,</span> <span style="color:#66d9ef">final</span> String fork<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#75715e">// copy the core logic to run the test
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>    <span style="color:#75715e">// .......
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>  <span style="color:#f92672">}</span>
+</span></span><span style="display:flex;"><span><span style="color:#f92672">}</span>
+</span></span></code></pre></div><p>Let&rsquo;s build and then we&rsquo;ll create a Rust integration using <a href="https://crates.io/jni">jni</a>. I chose Rust since I am not a particularly experienced C/C++ developer.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span><span style="color:#75715e"># openjdk-21</span>
+</span></span><span style="display:flex;"><span>cd besu
+</span></span><span style="display:flex;"><span>./gradlew --parallel ethereum:evmtool:installDist
+</span></span><span style="display:flex;"><span>mkdir bindings
+</span></span><span style="display:flex;"><span>cd bindings
+</span></span><span style="display:flex;"><span>cargo init
+</span></span><span style="display:flex;"><span>cargo add jni --feautres invocation
+</span></span></code></pre></div><p>The following code initializes a minimal JVM with the required classpath libraries. Then, it invokes our <code>fuzzStateTest</code> function with a simple test state test.
+We do this in an infinite loop just to see the execution time.</p>
+<p>In <code>src/main.rs</code></p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-rust" data-lang="rust"><span style="display:flex;"><span><span style="color:#66d9ef">use</span> std::time::SystemTime;
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#66d9ef">use</span> jni::objects::{JClass, JObject, JString, JValue};
+</span></span><span style="display:flex;"><span><span style="color:#66d9ef">use</span> jni::JNIVersion;
+</span></span><span style="display:flex;"><span><span style="color:#66d9ef">use</span> jni::JavaVM;
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#66d9ef">fn</span> <span style="color:#a6e22e">main</span>() -&gt; Result<span style="color:#f92672">&lt;</span>(), Box<span style="color:#f92672">&lt;</span><span style="color:#66d9ef">dyn</span> std::error::Error<span style="color:#f92672">&gt;&gt;</span> {
+</span></span><span style="display:flex;"><span>    <span style="color:#75715e">// Find all the built .jar files
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>    <span style="color:#66d9ef">let</span> lib_dir <span style="color:#f92672">=</span> std::fs::read_dir(<span style="color:#e6db74">&#34;../ethereum/evmtool/build/install/evmtool/lib/&#34;</span>);
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">let</span> <span style="color:#66d9ef">mut</span> jar_paths <span style="color:#f92672">=</span> vec![];
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">if</span> <span style="color:#66d9ef">let</span> Ok(entries) <span style="color:#f92672">=</span> lib_dir {
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">for</span> entry <span style="color:#66d9ef">in</span> entries.flatten() {
+</span></span><span style="display:flex;"><span>            <span style="color:#66d9ef">let</span> entry_path <span style="color:#f92672">=</span> entry.path();
+</span></span><span style="display:flex;"><span>            <span style="color:#66d9ef">if</span> entry_path.extension().and_then(<span style="color:#f92672">|</span>s<span style="color:#f92672">|</span> s.to_str()) <span style="color:#f92672">==</span> Some(<span style="color:#e6db74">&#34;jar&#34;</span>) {
+</span></span><span style="display:flex;"><span>                jar_paths.push(entry_path.to_string_lossy().to_string());
+</span></span><span style="display:flex;"><span>            }
+</span></span><span style="display:flex;"><span>        }
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span>    <span style="color:#75715e">// Add them as options
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>    <span style="color:#66d9ef">let</span> jvm_args <span style="color:#f92672">=</span> jni::InitArgsBuilder::new()
+</span></span><span style="display:flex;"><span>        .version(JNIVersion::V8) <span style="color:#75715e">// Java 8 style; choose version matching your JDK
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>        .option(format!(<span style="color:#e6db74">&#34;-Djava.class.path={}&#34;</span>, jar_paths.join(<span style="color:#e6db74">&#34;:&#34;</span>)))
+</span></span><span style="display:flex;"><span>        .build()<span style="color:#f92672">?</span>;
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    <span style="color:#75715e">// Create the JVM
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>    <span style="color:#66d9ef">let</span> jvm <span style="color:#f92672">=</span> JavaVM::new(jvm_args)<span style="color:#f92672">?</span>;
+</span></span><span style="display:flex;"><span>    <span style="color:#75715e">// Find our harness function
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>    <span style="color:#66d9ef">let</span> <span style="color:#66d9ef">mut</span> env <span style="color:#f92672">=</span> jvm.attach_current_thread()<span style="color:#f92672">?</span>;
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">let</span> class <span style="color:#f92672">=</span> env.find_class(<span style="color:#e6db74">&#34;org/hyperledger/besu/evmtool/Fuzz&#34;</span>)<span style="color:#f92672">?</span>;
+</span></span><span style="display:flex;"><span>    <span style="color:#75715e">// For benchmarking&#39;s sakes, let&#39;s just run this in a loop
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>    <span style="color:#66d9ef">loop</span> {
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">let</span> json <span style="color:#f92672">=</span> env.new_string(std::fs::read_to_string(<span style="color:#e6db74">&#34;./test.json&#34;</span>).unwrap())<span style="color:#f92672">?</span>;
+</span></span><span style="display:flex;"><span>            <span style="color:#66d9ef">let</span> now <span style="color:#f92672">=</span> SystemTime::now();
+</span></span><span style="display:flex;"><span>            <span style="color:#66d9ef">let</span> result <span style="color:#f92672">=</span> env.call_static_method(
+</span></span><span style="display:flex;"><span>                <span style="color:#f92672">&amp;</span>class,
+</span></span><span style="display:flex;"><span>                <span style="color:#e6db74">&#34;fuzzStateTest&#34;</span>,
+</span></span><span style="display:flex;"><span>                <span style="color:#e6db74">&#34;(Ljava/lang/String;)Ljava/lang/String;&#34;</span>,
+</span></span><span style="display:flex;"><span>                <span style="color:#f92672">&amp;</span>[JValue::Object(<span style="color:#f92672">&amp;</span>JObject::from(json))],
+</span></span><span style="display:flex;"><span>            )<span style="color:#f92672">?</span>;
+</span></span><span style="display:flex;"><span>        println!(<span style="color:#e6db74">&#34;{:?}&#34;</span>, now.elapsed());
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span>    Ok(())
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>Now, let&rsquo;s run our experiment to see if embedding led to a speed up.</p>
+<pre tabindex="0"><code>cargo run
+ok(2.594644601s)                               
+ok(37.659974ms)                                
+Ok(18.633532ms)                                
+Ok(22.066574ms)                                
+Ok(13.567659ms)                                
+Ok(15.196381ms)                                
+Ok(11.666704ms)                                
+Ok(10.193306ms)                                
+Ok(9.886665ms)                                 
+Ok(8.426703ms)                                 
+Ok(6.817455ms)                                 
+Ok(8.034997ms)             
+</code></pre><p>That&rsquo;s a drastic speed up! Initially, it&rsquo;s a bit slow, but it&rsquo;s miles ahead of 2 seconds!
+I&rsquo;m certain that further optimizations could be made but that&rsquo;s for later&hellip;
+We now know that we can reasonably fuzz with this.</p>
+<h3 id="embedding-nethermind-net">Embedding Nethermind (.NET)<a hidden class="anchor" aria-hidden="true" href="#embedding-nethermind-net">#</a></h3>
+<p>Now, let&rsquo;s try .NET. which happens to <a href="https://learn.microsoft.com/en-us/dotnet/core/deploying/native-aot/?tabs=windows%2Cnet8">support</a> AOT (Ahead Of Time) compilation. According to the <a href="https://learn.microsoft.com/en-us/dotnet/core/deploying/native-aot/?tabs=windows%2Cnet8">docs</a>:</p>
+<p>&ldquo;Native AOT apps have faster startup time and smaller memory footprints.&rdquo;</p>
+<p>Perfect! let&rsquo;s try!</p>
+<pre tabindex="0"><code>cd nethermind/src/Nethermind/Nethermind.Test.Runner/
+dotnet build Nethermind.Test.Runner.csproj -c Release
+vim Nethermind.Test.Runner.csproj
+</code></pre><p>Add the following lines inside the <code>&lt;PropertyGroup&gt;...&lt;PropertyGroup&gt;</code> section.</p>
+<pre tabindex="0"><code>&lt;PublishAot&gt;true&lt;/PublishAot&gt;
+&lt;ValidateExecutableReferencesMatchSelfContained&gt;
+    false
+&lt;/ValidateExecutableReferencesMatchSelfContained&gt;
+</code></pre><p>Let&rsquo;s build</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>Nethermind.Test.Runner net10.0 linux-x64 failed with <span style="color:#ae81ff">4</span> error<span style="color:#f92672">(</span>s<span style="color:#f92672">)</span> <span style="color:#f92672">(</span>3.5s<span style="color:#f92672">)</span> → /tmp/nethermind/src/Nethermind/artifacts/bin/Nethermind.Test.Runner/release_linux-x64/nethtest.dll
+</span></span><span style="display:flex;"><span> /tmp/nethermind/src/Nethermind/Nethermind.Serialization.Json/EthereumJsonSerializer.cs<span style="color:#f92672">(</span>59<span style="color:#f92672">)</span>: Trim analysis error IL2026: Nethermind.Serialization.Json.EthereumJsonSerializer.Serialize&lt;T&gt;<span style="color:#f92672">(</span>T,Boolean<span style="color:#f92672">)</span>: Using member <span style="color:#e6db74">&#39;System.Text.Json.JsonSerializer.Serialize&lt;T&gt;(T,JsonSerializerOptions)&#39;</span> which has <span style="color:#e6db74">&#39;RequiresUnreferencedCodeAttribute&#39;</span> can break functionality when trimming application code. JSON serialization and deserialization might require types that cannot be statically analyzed. Use the overload that takes a JsonTypeInfo or JsonSerializerContext, or make sure all of the required types are preserved.
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span> /tmp/nethermind/src/Nethermind/Nethermind.Serialization.Json/EthereumJsonSerializer.cs<span style="color:#f92672">(</span>59<span style="color:#f92672">)</span>: AOT analysis error IL3050: Nethermind.Serialization.Json.EthereumJsonSerializer.Serialize&lt;T&gt;<span style="color:#f92672">(</span>T,Boolean<span style="color:#f92672">)</span>: Using member <span style="color:#e6db74">&#39;System.Text.Json.JsonSerializer.Serialize&lt;T&gt;(T,JsonSerializerOptions)&#39;</span> which has <span style="color:#e6db74">&#39;RequiresDynamicCodeAttribute&#39;</span> can break functionality when AOT compiling. JSON serialization and deserialization might require types that cannot be statically analyzed and might need runtime code generation. Use System.Text.Json source generation <span style="color:#66d9ef">for</span> native AOT applications.
+</span></span><span style="display:flex;"><span> EXEC : error Index was outside the bounds of the array.
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>/home/aarnav/.nuget/packages/microsoft.dotnet.ilcompiler/10.0.0/build/Microsoft.NETCore.Native.targets<span style="color:#f92672">(</span>330,5<span style="color:#f92672">)</span>: error MSB3073: The command <span style="color:#e6db74">&#34;&#34;</span>/home/aarnav/.nuget/packages/runtime.linux-x64.microsoft.dotnet.ilcompiler/10.0.0/tools/ilc<span style="color:#e6db74">&#34; @&#34;</span>/tmp/nethermind/src/Nethermind/artifacts/obj/Nethermind.Test.Runner/release_linux-x64/native/nethtest.ilc.rsp<span style="color:#e6db74">&#34;&#34;</span> exited with code 1.
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>Build failed with <span style="color:#ae81ff">4</span> error<span style="color:#f92672">(</span>s<span style="color:#f92672">)</span> in 44.6s
+</span></span></code></pre></div><p>It turns out that using reflection is not allowed in .NET&rsquo;s AOT mode.</p>
+<p>Fixing the JSON reflection errors led to other reflection errors in Nethermind&rsquo;s EVM runtime. The extensive usage of runtime reflection meant that AOT compilation was not possible without significant changes.</p>
+<p>Since we cannot compile it as an Ahead of Time library, we must embed the runtime, similar to Besu.</p>
+<p>Similar to what we did for Java, we first need to abstract the test runner into another function, since it is <a href="https://github.com/NethermindEth/nethermind/blob/master/src/Nethermind/Nethermind.Test.Runner/StateTestRunner.cs">tightly coupled</a> with the CLI.</p>
+<p>Let&rsquo;s try a very simple approach:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-c#" data-lang="c#"><span style="display:flex;"><span><span style="color:#75715e">// FuzzRunner.cs</span>
+</span></span><span style="display:flex;"><span><span style="color:#66d9ef">public</span> <span style="color:#66d9ef">static</span> <span style="color:#66d9ef">int</span> FuzzRunTest(IntPtr args, <span style="color:#66d9ef">int</span> sizeBytes)
+</span></span><span style="display:flex;"><span>{
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">try</span>
+</span></span><span style="display:flex;"><span>    {
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">string</span> testJson = System.Text.Encoding.UTF8.GetString(
+</span></span><span style="display:flex;"><span>            <span style="color:#66d9ef">new</span> ReadOnlySpan&lt;<span style="color:#66d9ef">byte</span>&gt;((<span style="color:#66d9ef">void</span>*)args, sizeBytes)
+</span></span><span style="display:flex;"><span>        );
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">ulong</span> chainId = MainnetSpecProvider.Instance.ChainId;
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>        IEnumerable&lt;EthereumTest&gt; tests = JsonToEthereumTest.ConvertStateTest(testJson);
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>        StateTestsRunner runner = <span style="color:#66d9ef">new</span>(
+</span></span><span style="display:flex;"><span>            <span style="color:#66d9ef">new</span> InMemoryTestSourceLoader(tests),
+</span></span><span style="display:flex;"><span>            WhenTrace.Never,
+</span></span><span style="display:flex;"><span>            traceMemory: <span style="color:#66d9ef">false</span>,
+</span></span><span style="display:flex;"><span>            traceStack: <span style="color:#66d9ef">false</span>,
+</span></span><span style="display:flex;"><span>            chainId,
+</span></span><span style="display:flex;"><span>            filter: <span style="color:#66d9ef">null</span>,
+</span></span><span style="display:flex;"><span>            enableWarmup: <span style="color:#66d9ef">false</span>,
+</span></span><span style="display:flex;"><span>            outputWriter: <span style="color:#66d9ef">null</span>);
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">var</span> result = runner.RunTests();
+</span></span><span style="display:flex;"><span>        <span style="color:#75715e">// TODO: return stateRoot</span>
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">return</span> <span style="color:#ae81ff">0</span>;
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">catch</span> (Exception ex)
+</span></span><span style="display:flex;"><span>    {
+</span></span><span style="display:flex;"><span>        Console.Error.WriteLine(<span style="color:#e6db74">$&#34;Error in FuzzRunTest: {ex}&#34;</span>);
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">return</span> <span style="color:#ae81ff">1</span>;
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>Let&rsquo;s try building and embedding.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span><span style="color:#75715e"># dotnet 10</span>
+</span></span><span style="display:flex;"><span>cd nethermind/src/Nethermind/Nethermind.Test.Runner/
+</span></span><span style="display:flex;"><span>dotnet build Nethermind.Test.Runner.csproj -c Release
+</span></span><span style="display:flex;"><span>cd ../../../..
+</span></span><span style="display:flex;"><span>mkdir bindings
+</span></span><span style="display:flex;"><span>cd bindings
+</span></span><span style="display:flex;"><span>cargo init
+</span></span><span style="display:flex;"><span>cargo add notecorehost
+</span></span></code></pre></div><p>Here&rsquo;s the rust shim.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-rust" data-lang="rust"><span style="display:flex;"><span><span style="color:#66d9ef">use</span> netcorehost::{hostfxr::Hostfxr, pdcstr, pdcstring::PdCString};
+</span></span><span style="display:flex;"><span><span style="color:#66d9ef">use</span> std::env;
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#66d9ef">fn</span> <span style="color:#a6e22e">main</span>() {
+</span></span><span style="display:flex;"><span>    env::set_current_dir(<span style="color:#e6db74">&#34;&lt;path_to_dlls&gt;&#34;</span>)
+</span></span><span style="display:flex;"><span>          .expect(<span style="color:#e6db74">&#34;Failed to set working directory&#34;</span>);
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">let</span> hostfxr <span style="color:#f92672">=</span> netcorehost::nethost::load_hostfxr().unwrap();
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">let</span> context <span style="color:#f92672">=</span> hostfxr
+</span></span><span style="display:flex;"><span>        .initialize_for_runtime_config(pdcstr<span style="color:#f92672">!</span>(<span style="color:#e6db74">&#34;Nethermind.Test.Runner.Lib.runtimeconfig.json&#34;</span>))
+</span></span><span style="display:flex;"><span>        .unwrap();
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">let</span> fn_loader <span style="color:#f92672">=</span> context
+</span></span><span style="display:flex;"><span>        .get_delegate_loader_for_assembly(pdcstr<span style="color:#f92672">!</span>(<span style="color:#e6db74">&#34;Nethermind.Test.Runner.Lib.dll&#34;</span>))
+</span></span><span style="display:flex;"><span>        .unwrap();
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">let</span> run_test <span style="color:#f92672">=</span> fn_loader
+</span></span><span style="display:flex;"><span>        .get_function_with_default_signature(
+</span></span><span style="display:flex;"><span>            pdcstr<span style="color:#f92672">!</span>(<span style="color:#e6db74">&#34;Nethermind.Test.Runner.Lib.FuzzTestRunner, Nethermind.Test.Runner.Lib&#34;</span>),
+</span></span><span style="display:flex;"><span>            pdcstr<span style="color:#f92672">!</span>(<span style="color:#e6db74">&#34;FuzzRunTest&#34;</span>),
+</span></span><span style="display:flex;"><span>        )
+</span></span><span style="display:flex;"><span>        .unwrap();
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">let</span> json <span style="color:#f92672">=</span>  std::fs::read_to_string(<span style="color:#e6db74">&#34;../test.json&#34;</span>).unwrap();
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">let</span> result <span style="color:#f92672">=</span> <span style="color:#66d9ef">unsafe</span> { run_test(json.as_str().as_ptr() <span style="color:#66d9ef">as</span> <span style="color:#f92672">*</span><span style="color:#66d9ef">const</span> std::ffi::c_void, json.len() <span style="color:#66d9ef">as</span> <span style="color:#66d9ef">i32</span>) };
+</span></span><span style="display:flex;"><span>    println!(<span style="color:#e6db74">&#34;Test result: {}&#34;</span>, result);
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p><code>cargo run</code> and I got a strange error:</p>
+<pre tabindex="0"><code>Error in FuzzRunTest: System.Collections.Generic.KeyNotFoundException: The given key was not present in the dictionary.
+   at NonBlocking.ConcurrentDictionary`2.ThrowKeyNotFoundException()
+   at NonBlocking.ConcurrentDictionary`2.get_Item(TKey key)
+   at Nethermind.Config.ConfigProvider.GetConfig(Type configType) in /home/aarnav/projects/evm-differential-fuzzer/nethermind/src/Nethermind/Nethermind.Config/ConfigProvider.cs:line 92
+   at Nethermind.Config.ConfigProvider.GetConfig[T]() in /home/aarnav/projects/evm-differential-fuzzer/nethermind/src/Nethermind/Nethermind.Config/ConfigProvider.cs:line 77
+   at Nethermind.Core.Test.Modules.PseudoNethermindModule.Load(ContainerBuilder builder) in /home/aarnav/projects/evm-differential-fuzzer/nethermind/src/Nethermind/Nethermind.Core.Test/Modules/PseudoNethermindModule.cs:line 37
+   at Autofac.Module.Configure(IComponentRegistryBuilder componentRegistry)
+   at Autofac.Core.Registration.ModuleRegistrar.&lt;.ctor&gt;b__1_0(IComponentRegistryBuilder reg)
+   at Autofac.ContainerBuilder.Build(IComponentRegistryBuilder componentRegistry, Boolean excludeDefaultModules)
+   at Autofac.ContainerBuilder.UpdateRegistry(IComponentRegistryBuilder componentRegistry)
+   at Autofac.Module.Configure(IComponentRegistryBuilder componentRegistry)
+   at Autofac.Core.Registration.ModuleRegistrar.&lt;.ctor&gt;b__1_0(IComponentRegistryBuilder reg)
+   at Autofac.ContainerBuilder.Build(IComponentRegistryBuilder componentRegistry, Boolean excludeDefaultModules)
+   at Autofac.ContainerBuilder.Build(ContainerBuildOptions options)
+   at Ethereum.Test.Base.GeneralStateTestBase.RunTest(GeneralStateTest test, ITxTracer txTracer) in /home/aarnav/projects/evm-differential-fuzzer/nethermind/src/Nethermind/Ethereum.Test.Base/GeneralTestBase.cs:line 80
+   at Nethermind.Test.Runner.StateTestsRunner.RunTests() in /home/aarnav/projects/evm-differential-fuzzer/nethermind/src/Nethermind/Nethermind.Test.Runner/StateTestRunner.cs:line 110
+   at Nethermind.Test.Runner.Program.FuzzRunTest(IntPtr args, Int32 sizeBytes) in /home/aarnav/projects/evm-differential-fuzzer/nethermind/src/Nethermind/Nethermind.Test.Runner/Program.cs:line 202
+Result: 1
+</code></pre><p>I sunk several hours into trying to fix this, to no avail. If someone knows how to embed .NET, please let me know. I suspect that the issue is:</p>
+<ol>
+<li>the order in which the <code>.dll</code> files are loaded.</li>
+<li>A type-registration issue during runtime.</li>
+</ol>
+<p>Frankly, debugging this was a  difficult undertaking for someone who has no clue about the .NET ecosystem. LLMs were of no assistance. I decided my time was better spent fuzzing instead of getting this to work. Let&rsquo;s use the shared memory approach.</p>
+<p>This gives me the opportunity to explore another method! This is bound to be useful for another target as I&rsquo;m sure I will encounter targets that cannot be embedded easily.</p>
+<h2 id="shared-memory">Shared Memory<a hidden class="anchor" aria-hidden="true" href="#shared-memory">#</a></h2>
+<p>Since we could not get the embedding to work for .NET, we can implement a server with IPC. Like this, we make sure that we only need to start the runtime once.</p>
+<p>The architecture is the following:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-python" data-lang="python"><span style="display:flex;"><span>testdata <span style="color:#f92672">=</span> create_shared_memory_segment(<span style="color:#e6db74">&#34;nethermind__&lt;core_id&gt;&#34;</span>);
+</span></span><span style="display:flex;"><span>signal <span style="color:#f92672">=</span> create_shared_memory_segment(<span style="color:#e6db74">&#34;nethermind__&lt;core_id&gt;__signal&#34;</span>);
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>loop {
+</span></span><span style="display:flex;"><span>   <span style="color:#66d9ef">if</span> read_data(signal) <span style="color:#f92672">==</span> <span style="color:#e6db74">&#34;START</span><span style="color:#ae81ff">\0</span><span style="color:#e6db74">&#34;</span> {
+</span></span><span style="display:flex;"><span>        json <span style="color:#f92672">=</span> read_data(testdata);
+</span></span><span style="display:flex;"><span>        result <span style="color:#f92672">=</span> do_state_test(json);
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">if</span> result<span style="color:#f92672">.</span>is_err() {
+</span></span><span style="display:flex;"><span>            write_data(testdata, result<span style="color:#f92672">.</span>error);
+</span></span><span style="display:flex;"><span>            write_data(signal, <span style="color:#e6db74">&#34;DONE</span><span style="color:#ae81ff">\0\0</span><span style="color:#e6db74">&#34;</span>);
+</span></span><span style="display:flex;"><span>        } <span style="color:#66d9ef">else</span> {
+</span></span><span style="display:flex;"><span>            write_data(testdata, result<span style="color:#f92672">.</span>stateRoot);
+</span></span><span style="display:flex;"><span>            write_data(signal, <span style="color:#e6db74">&#34;DONE</span><span style="color:#ae81ff">\0\0</span><span style="color:#e6db74">&#34;</span>);
+</span></span><span style="display:flex;"><span>        }
+</span></span><span style="display:flex;"><span>    } <span style="color:#66d9ef">else</span> {
+</span></span><span style="display:flex;"><span>        sleep(<span style="color:#ae81ff">10</span>ms);
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>We need the <code>signal</code> to avoid race-conditions when reading test data.</p>
+<p>Implementing this was very quick with Claude, since I had no .NET knowledge. Here&rsquo;s the code. Sorry for the big blob! Speed results right after.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-c#" data-lang="c#"><span style="display:flex;"><span><span style="color:#75715e">// src/Nethermind/Nethermind.Test.Runner/Program.cs</span>
+</span></span><span style="display:flex;"><span><span style="color:#66d9ef">private</span> <span style="color:#66d9ef">static</span> <span style="color:#66d9ef">int</span> RunServerMode(ParseResult parseResult, <span style="color:#66d9ef">string</span> memoryId, CancellationToken cancellationToken)
+</span></span><span style="display:flex;"><span>{
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">ulong</span> chainId = parseResult.GetValue(Options.GnosisTest) ? GnosisSpecProvider.Instance.ChainId : MainnetSpecProvider.Instance.ChainId;
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">const</span> <span style="color:#66d9ef">int</span> SharedMemorySize = <span style="color:#ae81ff">8092</span>;
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">string</span> shmPath = <span style="color:#e6db74">$&#34;/dev/shm/{memoryId}&#34;</span>;
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">using</span> FileStream fs = <span style="color:#66d9ef">new</span>(shmPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.ReadWrite);
+</span></span><span style="display:flex;"><span>    fs.SetLength(SharedMemorySize);
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">using</span> MemoryMappedFile mmf = MemoryMappedFile.CreateFromFile(fs, <span style="color:#66d9ef">null</span>, SharedMemorySize, MemoryMappedFileAccess.ReadWrite, HandleInheritability.None, leaveOpen: <span style="color:#66d9ef">false</span>);
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">using</span> MemoryMappedViewAccessor accessor = mmf.CreateViewAccessor(<span style="color:#ae81ff">0</span>, SharedMemorySize, MemoryMappedFileAccess.ReadWrite);
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">const</span> <span style="color:#66d9ef">int</span> SharedMemorySizeSignal = <span style="color:#ae81ff">6</span>;
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">string</span> shmSignalPath = <span style="color:#e6db74">$&#34;/dev/shm/{memoryId}__signal&#34;</span>;
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">using</span> FileStream fsSignal = <span style="color:#66d9ef">new</span>(shmSignalPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.ReadWrite);
+</span></span><span style="display:flex;"><span>    fsSignal.SetLength(SharedMemorySizeSignal);
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">using</span> MemoryMappedFile mmfSignal = MemoryMappedFile.CreateFromFile(fsSignal, <span style="color:#66d9ef">null</span>, SharedMemorySizeSignal, MemoryMappedFileAccess.ReadWrite, HandleInheritability.None, leaveOpen: <span style="color:#66d9ef">false</span>);
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">using</span> MemoryMappedViewAccessor accessorSignal = mmfSignal.CreateViewAccessor(<span style="color:#ae81ff">0</span>, SharedMemorySizeSignal, MemoryMappedFileAccess.ReadWrite);
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">while</span> (!cancellationToken.IsCancellationRequested)
+</span></span><span style="display:flex;"><span>    {
+</span></span><span style="display:flex;"><span>        Thread.Sleep(<span style="color:#ae81ff">10</span>);
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">byte</span>[] signalBuffer = <span style="color:#66d9ef">new</span> <span style="color:#66d9ef">byte</span>[SharedMemorySizeSignal];
+</span></span><span style="display:flex;"><span>        accessorSignal.ReadArray(<span style="color:#ae81ff">0</span>, signalBuffer, <span style="color:#ae81ff">0</span>, SharedMemorySizeSignal);
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">if</span> (signalBuffer.SequenceEqual(Encoding.UTF8.GetBytes(<span style="color:#e6db74">&#34;START\0&#34;</span>)))
+</span></span><span style="display:flex;"><span>        {
+</span></span><span style="display:flex;"><span>            <span style="color:#66d9ef">byte</span>[] buffer = <span style="color:#66d9ef">new</span> <span style="color:#66d9ef">byte</span>[SharedMemorySize];
+</span></span><span style="display:flex;"><span>            accessor.ReadArray(<span style="color:#ae81ff">0</span>, buffer, <span style="color:#ae81ff">0</span>, SharedMemorySize);
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>            <span style="color:#66d9ef">int</span> jsonLength = Array.IndexOf(buffer, (<span style="color:#66d9ef">byte</span>)<span style="color:#ae81ff">0</span>);
+</span></span><span style="display:flex;"><span>            <span style="color:#66d9ef">if</span> (jsonLength == -<span style="color:#ae81ff">1</span>) jsonLength = SharedMemorySize;
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>            <span style="color:#66d9ef">string</span> testJson = Encoding.UTF8.GetString(buffer, <span style="color:#ae81ff">0</span>, jsonLength);
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>            <span style="color:#66d9ef">try</span>
+</span></span><span style="display:flex;"><span>            {
+</span></span><span style="display:flex;"><span>                IEnumerable&lt;EthereumTest&gt; tests;
+</span></span><span style="display:flex;"><span>                tests = JsonToEthereumTest.ConvertStateTest(testJson);
+</span></span><span style="display:flex;"><span>                StateTestsRunner runner = <span style="color:#66d9ef">new</span>(
+</span></span><span style="display:flex;"><span>                    <span style="color:#66d9ef">new</span> InMemoryTestSourceLoader(tests),
+</span></span><span style="display:flex;"><span>                    WhenTrace.Never,
+</span></span><span style="display:flex;"><span>                    traceMemory: <span style="color:#66d9ef">false</span>,
+</span></span><span style="display:flex;"><span>                    traceStack: <span style="color:#66d9ef">false</span>,
+</span></span><span style="display:flex;"><span>                    chainId,
+</span></span><span style="display:flex;"><span>                    filter: <span style="color:#66d9ef">null</span>,
+</span></span><span style="display:flex;"><span>                    enableWarmup: <span style="color:#66d9ef">false</span>,
+</span></span><span style="display:flex;"><span>                    outputWriter: <span style="color:#66d9ef">null</span>);
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>                <span style="color:#66d9ef">var</span> result = runner.RunTests().First();
+</span></span><span style="display:flex;"><span>                <span style="color:#66d9ef">string</span> resultString = result?.StateRoot?.ToString() ?? <span style="color:#e6db74">&#34;null&#34;</span>;
+</span></span><span style="display:flex;"><span>                <span style="color:#66d9ef">byte</span>[] resultBytes = Encoding.UTF8.GetBytes(resultString);
+</span></span><span style="display:flex;"><span>                <span style="color:#75715e">/// write bytes to shared memory</span>
+</span></span><span style="display:flex;"><span>            }
+</span></span><span style="display:flex;"><span>            <span style="color:#66d9ef">catch</span> (Exception ex)
+</span></span><span style="display:flex;"><span>            {
+</span></span><span style="display:flex;"><span>                <span style="color:#75715e">/// report error</span>
+</span></span><span style="display:flex;"><span>            }
+</span></span><span style="display:flex;"><span>        }
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">return</span> <span style="color:#ae81ff">0</span>;
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>Let&rsquo;s look at the speed results:
+I wrote a quick script to get results (milliseconds) from Nethermind:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span><span style="color:#75715e"># all in milliseconds</span>
+</span></span><span style="display:flex;"><span><span style="color:#f92672">[</span>Nethermind-1<span style="color:#f92672">]</span> <span style="color:#ae81ff">2611</span>
+</span></span><span style="display:flex;"><span><span style="color:#f92672">[</span>Nethermind-1<span style="color:#f92672">]</span> <span style="color:#ae81ff">15</span>
+</span></span><span style="display:flex;"><span><span style="color:#f92672">[</span>Nethermind-1<span style="color:#f92672">]</span> <span style="color:#ae81ff">13</span>
+</span></span><span style="display:flex;"><span><span style="color:#f92672">[</span>Nethermind-1<span style="color:#f92672">]</span> <span style="color:#ae81ff">8</span>
+</span></span><span style="display:flex;"><span><span style="color:#f92672">[</span>Nethermind-1<span style="color:#f92672">]</span> <span style="color:#ae81ff">6</span>
+</span></span><span style="display:flex;"><span><span style="color:#f92672">[</span>Nethermind-1<span style="color:#f92672">]</span> <span style="color:#ae81ff">6</span>
+</span></span></code></pre></div><p>After the first few cases, both Java and C# work at expected speeds! Great! Now, we have two approaches, both working reasonably well. We can begin fuzzing!</p>
+<p>Actually! There will be a part two to this article! The full harness will be shared and I will talk about the grammar strategies I&rsquo;ve implemented and how they fared.</p>
+<h2 id="to-conclude">To Conclude<a hidden class="anchor" aria-hidden="true" href="#to-conclude">#</a></h2>
+<p>It was a challenge to differential fuzz two languages I had almost no experience with. Over all this campaign involved four languages:
+Go, Rust, .NET, and Java.</p>
+<p>I will probably just go with the shared memory approach for any other interpreted target because it&rsquo;s trivial to implement and &ldquo;just works&quot;™.</p>
+<h2 id="lessons-learnt">Lessons learnt<a hidden class="anchor" aria-hidden="true" href="#lessons-learnt">#</a></h2>
+<h3 id="patching-is-inevitable">Patching is inevitable<a hidden class="anchor" aria-hidden="true" href="#patching-is-inevitable">#</a></h3>
+<p>The sooner you get comfortable diving into unknown code, the better your results will be. Hack it, and always measure!</p>
+<h3 id="use-the-magic-strace-command">Use the magic strace command.<a hidden class="anchor" aria-hidden="true" href="#use-the-magic-strace-command">#</a></h3>
+<p>The ultimate debugging command (credit to the Fuzzing Discord).</p>
+<pre tabindex="0"><code>strace -tt -yy -y -f -e trace=openat,open,read,write,pipe,socket,dup2,clone,close -s 10000 -o /tmp/strace.log &lt;your command&gt;
+</code></pre><h3 id="always-keep-it-simple">Always keep it simple.<a hidden class="anchor" aria-hidden="true" href="#always-keep-it-simple">#</a></h3>
+<p>Fuzzing is about tradeoffs. Find out what&rsquo;s best for your target. Measure, and do not over-optimize at first.</p>
+
+
+  </div>
+
+  <footer class="post-footer">
+    <ul class="post-tags">
+    </ul>
+  </footer>
+</article>
+    </main>
+    
+<footer class="footer">
+    <span>
+        Feedback? Issues? blog [dot] contact [at] ruebezahl[dot]mozmail[dot]com
+    </span>
+    <span>
+        <a rel="license" href="http://creativecommons.org/licenses/by-nc-sa/4.0/">All writing is licensed under a <a rel="license" href="http://creativecommons.org/licenses/by-nc-sa/4.0/">Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License</a>
+    </span>
+</footer>
+<a href="#top" aria-label="go to top" title="Go to Top (Alt + G)" class="top-link" id="top-link" accesskey="g">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 6" fill="currentColor">
+        <path d="M12 6H0l6-6z" />
+    </svg>
+</a>
+
+<script>
+    let menu = document.getElementById('menu')
+    if (menu) {
+        menu.scrollLeft = localStorage.getItem("menu-scroll-position");
+        menu.onscroll = function () {
+            localStorage.setItem("menu-scroll-position", menu.scrollLeft);
+        }
+    }
+
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+        anchor.addEventListener("click", function (e) {
+            e.preventDefault();
+            var id = this.getAttribute("href").substr(1);
+            if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                document.querySelector(`[id='${decodeURIComponent(id)}']`).scrollIntoView({
+                    behavior: "smooth"
+                });
+            } else {
+                document.querySelector(`[id='${decodeURIComponent(id)}']`).scrollIntoView();
+            }
+            if (id === "top") {
+                history.replaceState(null, null, " ");
+            } else {
+                history.pushState(null, null, `#${id}`);
+            }
+        });
+    });
+
+</script>
+<script>
+    var mybutton = document.getElementById("top-link");
+    window.onscroll = function () {
+        if (document.body.scrollTop > 800 || document.documentElement.scrollTop > 800) {
+            mybutton.style.visibility = "visible";
+            mybutton.style.opacity = "1";
+        } else {
+            mybutton.style.visibility = "hidden";
+            mybutton.style.opacity = "0";
+        }
+    };
+
+</script>
+<script>
+    document.getElementById("theme-toggle").addEventListener("click", () => {
+        if (document.body.className.includes("dark")) {
+            document.body.classList.remove('dark');
+            localStorage.setItem("pref-theme", 'light');
+        } else {
+            document.body.classList.add('dark');
+            localStorage.setItem("pref-theme", 'dark');
+        }
+    })
+
+</script>
+</body>
+
+</html>

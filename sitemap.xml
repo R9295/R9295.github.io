@@ -2,6 +2,15 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
   xmlns:xhtml="http://www.w3.org/1999/xhtml">
   <url>
+    <loc>https://R9295.github.io/posts/differential-fuzzing-accross-languages/</loc>
+    <lastmod>2025-12-17T12:55:13+01:00</lastmod>
+  </url><url>
+    <loc>https://R9295.github.io/posts/</loc>
+    <lastmod>2025-12-17T12:55:13+01:00</lastmod>
+  </url><url>
+    <loc>https://R9295.github.io/about/</loc>
+    <lastmod>2025-12-17T00:00:00+00:00</lastmod>
+  </url><url>
     <loc>https://R9295.github.io/tags/mitigate/</loc>
     <lastmod>2023-06-15T00:00:00+00:00</lastmod>
   </url><url>
@@ -9,9 +18,6 @@
     <lastmod>2023-06-15T00:00:00+00:00</lastmod>
   </url><url>
     <loc>https://R9295.github.io/tags/pip/</loc>
-    <lastmod>2023-06-15T00:00:00+00:00</lastmod>
-  </url><url>
-    <loc>https://R9295.github.io/posts/</loc>
     <lastmod>2023-06-15T00:00:00+00:00</lastmod>
   </url><url>
     <loc>https://R9295.github.io/tags/python/</loc>
@@ -46,9 +52,6 @@
   </url><url>
     <loc>https://R9295.github.io/</loc>
     <lastmod>2022-01-11T00:00:00+00:00</lastmod>
-  </url><url>
-    <loc>https://R9295.github.io/about/</loc>
-    <lastmod>2021-01-11T00:00:00+00:00</lastmod>
   </url><url>
     <loc>https://R9295.github.io/categories/</loc>
   </url><url>

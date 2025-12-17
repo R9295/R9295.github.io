@@ -23,9 +23,9 @@ Differential fuzzing is one of the most exciting forms of fuzzing. The essence i
       <pubDate>Wed, 17 Dec 2025 00:00:00 +0000</pubDate>
       
       <guid>https://R9295.github.io/about/</guid>
-      <description>Hello all, I am Aarnav, a security engineer. I primarily work on fuzzing.
-Fuzzers Here are the fuzzers I&#39;ve built Autarkie link Autarkie is a native grammar fuzzer built in Rust. Using procedural macros, it automatically creates a grammar fuzzer based on any Rust data structure. Autarkie is heavily inspired by [nautilus](https://github.com/nautilus-fuzz/nautilus).
-libafl-fuzz link libafl-fuzz is an work-in-progress re-write of AFL++&#39;s afl-fuzz with LibAFL. Sanctioned as a Google Summer of Code project, libafl-fuzz supports aims for AFL++ compatibility with modern features</description>
+      <description>Hello all, I am Aarnav, a security engineer. I primarily work on fuzzing. This includes building fuzzers, associated tooling and fuzzing harnesses for targets.
+Fuzzers Here are the fuzzers I&#39;ve built Autarkie link Autarkie is a native grammar fuzzer built in Rust. Using procedural macros, it automatically creates a grammar fuzzer based on any Rust data structure. Autarkie is heavily inspired by nautilus.
+libafl-fuzz link libafl-fuzz is an work-in-progress re-write of AFL++&#39;s afl-fuzz with LibAFL.</description>
     </item>
     
     <item>

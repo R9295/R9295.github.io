@@ -13,7 +13,7 @@
       <pubDate>Wed, 17 Dec 2025 12:55:13 +0100</pubDate>
       
       <guid>https://R9295.github.io/posts/differential-fuzzing-accross-languages/</guid>
-      <description>TLDR: This article is an exploration of integrating three different interpreted(!) languages to perform coverage guided, in-process differential fuzzing using LibAFL. Three approaches are attemped: Invoking as a command, embedding the interpreter and shared memory.
+      <description>TLDR: This article is an exploration of integrating three different languages to perform coverage guided, in-process differential fuzzing using LibAFL. Three approaches are attemped: Invoking as a command, embedding the interpreter and shared memory.
 Differential fuzzing is one of the most exciting forms of fuzzing. The essence is to test competing implementations of a library or an application with the same test input, with the hope of finding a difference in the execution outcome.</description>
     </item>
     
